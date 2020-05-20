@@ -1,5 +1,5 @@
 import numpy as np
-
+import random
 class ESN:
     '''
     Notes that this is a specific Echo State Network for training purpose, without the maximum features.
@@ -18,18 +18,37 @@ class ESN:
 
     def init_weights(self,proba_connexion):
         '''
-        Given an initial probability, creates all weight matrix. Can also be used as a reinitialisation of the ESN
+        Given an initial probability, creates all weight matrix. Can also be used as a reinitialisation of the ESN.
+        Idea of upgrade: give the initialisation of weigth as an argument, so that it is easily modulable.
         '''
         self.W = np.zeros((self.N,self.N))  #The internal weigth matrix
-        self.W_in = 2*np.random.rand(self.N,self.number_input_)-1  #We initialise between -1 and 1 (To review?)
-        self.W_out = 2*np.random.rand(self.N,self.number_input_)-1
-        self.W_fdb = 2*np.random.rand(self.N,self.number_input_)-1
+        self.W_in = 2*np.random.rand(self.N,self.number_input_) - 1  #We initialise between -1 and 1 uniformly, maybe to change
+        self.W_out = 2*np.random.rand(self.N,self.number_input_) - 1
+        self.W_fdb = 2*np.random.rand(self.N,self.number_input_) - 1
 
-    def update(self,input = np.zeros(())):
+        #The loop will connect the reservoir with a certain probability.
+        for i in range(self.N):
+            for j in range(self.N):
+                is_connected = (random.random()<proba_connexion)
+                if is_connected:
+                    self.W[i,j] = 2*random.random()-1   #Uniformly between -1 and 1, maybe to change.too
+
+    def update(self,input = []):
         '''
         '''
+        if input = []:
+            input = np.zeros((self.number_input_))
         pass
 
+    def simulation(self, nb_iter,initial_inputs):
+        pass
 
-test= ESN(10,1,100,50)
-print(test.W_in)
+    def save(self):
+        pass
+
+    @classmethod
+    def load(self):
+        pass
+
+test= ESN(10,0.1,100,50)
+print(test.W)
