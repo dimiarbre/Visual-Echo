@@ -9,7 +9,6 @@ def tanh(x):
     expo = np.exp(-2*x)
     return (1-expo)/(1+expo)
 
-
 class ESN:
     '''
     Notes that this is a specific Echo State Network for training purpose, without the maximum features.
@@ -40,7 +39,8 @@ class ESN:
                 if is_connected:
                     self.W[i,j] = 2*random.random()-1   #Uniformly between -1 and 1, maybe to change
         eigenvalue = max(abs(np.linalg.eig(self.W)[0]))
-        print(eigenvalue,self.W)
+        if eigenvalue == 0.0:
+            raise Exception("Null Maximum Eigenvalue")
         self.W *= spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
         self.W_in = 2*np.random.rand(self.N,self.number_input) - 1  #We initialise between -1 and 1 uniformly, maybe to change
         self.W_out = 2*np.random.rand(self.number_output, self.number_output+self.N + self.number_input) - 1
@@ -67,7 +67,10 @@ class ESN:
             self.update(input)
         self.n_iter = 0     #We reset the iterations, and should have an initialised reservoir.
         while self.n_iter <= nb_iter:
-            self.update()
+            self.update
+
+    def train(self,inputs,expected):
+        pass
 
 
     def save(self,name):
@@ -77,7 +80,7 @@ class ESN:
     def load(self,name):
         pass
 
-test= ESN(number_neurons = 10,proba_connexion = 0.1,number_input = 100, number_output = 1,spectral_radius = 0.7)
+test= ESN(number_neurons = 100,proba_connexion = 0.1,number_input = 1, number_output = 1,spectral_radius = 0.7)
 print(max(abs(np.linalg.eig(test.W)[0]))) #Check wether the spectral radius is respected.
 print(test.y)
 test.update()
