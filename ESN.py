@@ -1,6 +1,6 @@
 import numpy as np
 import random
-
+import matplotlib.pyplot as plt
 ##Basic functions, used in this particular ESN class. Please note that since it is not a general one, they aren't modulable in this case, and changes has to be done by hand.
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
@@ -8,6 +8,9 @@ def sigmoid(x):
 def tanh(x):
     expo = np.exp(-2*x)
     return (1-expo)/(1+expo)
+
+def reciprocal_tanh(x):
+    return 0.5 * (np.ln(1 + x) - np.ln(1 - x))
 
 class ESN:
     '''
@@ -52,7 +55,17 @@ class ESN:
         '''
         if input == []:
             input = np.zeros((self.number_input))
-        self.x = sigmoid(np.dot(self.W_in, input) + np.dot(self.W, self.x) + np.dot(self.W_back, self.y))       #Sigmoid use
+
+        '''
+        Important: to change to leaky integrator.
+        '''
+        test= np.copy(self.x)
+        matrix1 = np.dot(self.W_in, input)
+        matrix2 = np.dot(self.W, self.x)
+        matrix3 = np.dot(self.W_back, self.y)
+        self.x = sigmoid( matrix1 + matrix2 + matrix3)       #Sigmoid use -> should change the function for discrete time
+        if (np.array_equal(test,self.x)):
+            print("Etat identique",self.n_iter)
         tab1 = np.concatenate((input,self.x))
         tab2 = np.concatenate((tab1,self.y))
         self.y = tanh(np.dot(self.W_out,tab2))                   #We use tanh for the output.
@@ -65,11 +78,25 @@ class ESN:
         '''
         for input in initial_inputs:
             self.update(input)
-        self.n_iter = 0     #We reset the iterations, and should have an initialised reservoir.
-        while self.n_iter <= nb_iter:
-            self.update
 
-    def train(self,inputs,expected):
+        self.n_iter = 0     #We reset the iterations, and should have an initialised reservoir.
+        predictions = []
+        while self.n_iter < nb_iter:
+            self.update()
+            predictions.append(self.y)
+        return predictions
+
+    def train(self,inputs,expected,starting_time):
+        X = np.zeros((len(inputs)-starting_time,self.N))
+        G = np.zeros((len(inputs)-starting_time,self.number_output))
+        for i in range(starting_time):
+            self.update(input[i])
+        for i in range(starting_time, len(inputs)):
+            X[i-starting_time] = np.copy(self.x)
+            G[i-starting_time] = expected[i]
+
+
+
         pass
 
 
@@ -80,10 +107,28 @@ class ESN:
     def load(self,name):
         pass
 
-test= ESN(number_neurons = 100,proba_connexion = 0.1,number_input = 1, number_output = 1,spectral_radius = 0.7)
+
+#Mackey glass function import.
+file = open("mgdata.dat.txt")
+mackey_glass = list(map(lambda x : [float(x.split(" ")[1].split("\n")[0])] ,file.readlines()))
+total_len = len(mackey_glass)
+
+def compare_MG(esn,starting_iteration):
+    plt.plot([i for i in range(starting_iteration,total_len)], [mackey_glass[i] for i in range(starting_iteration,total_len)],label = "Mackey Glass")
+    plt.plot([i for i in range(starting_iteration,total_len)],esn.simulation(total_len-starting_iteration,[mackey_glass[i] for i in range(starting_iteration)]),label = "ESN response")
+
+    plt.legend()
+    plt.show()
+
+
+test= ESN(number_neurons = 100, proba_connexion = 0.1, number_input = 1, number_output = 1, spectral_radius = 0.5)
 print(max(abs(np.linalg.eig(test.W)[0]))) #Check wether the spectral radius is respected.
-print(test.y)
-test.update()
-print(test.y)
-test.update()
-print(test.y)
+
+
+'''
+test.update(mackey_glass[0])
+test.update(mackey_glass[1])
+for i in range(100):
+    test.update()
+'''
+compare_MG(test,100)
