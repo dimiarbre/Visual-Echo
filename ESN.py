@@ -121,7 +121,7 @@ def compare_MG(esn,starting_iteration):
     plt.show()
 
 
-test= ESN(number_neurons = 100, proba_connexion = 0.1, number_input = 1, number_output = 1, spectral_radius = 0.5)
+test= ESN(number_neurons = 100, proba_connexion = 0.2, number_input = 1, number_output = 1, spectral_radius = 0.5)
 print(max(abs(np.linalg.eig(test.W)[0]))) #Check wether the spectral radius is respected.
 
 
