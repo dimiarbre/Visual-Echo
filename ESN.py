@@ -1,6 +1,8 @@
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+
 ##Basic functions, used in this particular ESN class. Please note that since it is not a general one, they aren't modulable in this case, and changes has to be done by hand.
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
@@ -66,9 +68,8 @@ class ESN:
         self.x = sigmoid( matrix1 + matrix2 + matrix3)       #Sigmoid use -> should change the function for discrete time
         if (np.array_equal(test,self.x)):
             print("Etat identique",self.n_iter)
-        tab1 = np.concatenate((input,self.x))
-        tab2 = np.concatenate((tab1,self.y))
-        self.y = tanh(np.dot(self.W_out,tab2))                   #We use tanh for the output.
+        tab1 = np.concatenate((input,self.x,self.y))
+        self.y = tanh(np.dot(self.W_out,tab1))                   #We use tanh for the output.
         self.n_iter +=1
 
 
@@ -87,15 +88,23 @@ class ESN:
         return predictions
 
     def train(self,inputs,expected,starting_time):
-        X = np.zeros((len(inputs)-starting_time,self.N))
+        X = np.zeros((len(inputs)-starting_time,self.N+self.number_input+self.number_output))
         G = np.zeros((len(inputs)-starting_time,self.number_output))
-        for i in range(starting_time):
-            self.update(input[i])
+        for i in range(starting_time):  #The starting period
+            self.update(inputs[i])
         for i in range(starting_time, len(inputs)):
-            X[i-starting_time] = np.copy(self.x)
-            G[i-starting_time] = expected[i]
+            self.update(inputs[i])
+            X[i-starting_time] = np.concatenate((inputs[i],self.x,self.y))
+            G[i-starting_time] = expected[i-starting_time]
 
-
+        for j in range(self.number_output):
+            model = LinearRegression()
+            print(X.shape,G[:,j].shape)
+            model.fit(X,G[:,j])
+            newWeights = model.coef_
+            print(self.W_out)
+            self.W_out[j] = newWeights
+            print(self.W_out)
 
         pass
 
@@ -114,6 +123,7 @@ mackey_glass = list(map(lambda x : [float(x.split(" ")[1].split("\n")[0])] ,file
 total_len = len(mackey_glass)
 
 def compare_MG(esn,starting_iteration):
+
     plt.plot([i for i in range(starting_iteration,total_len)], [mackey_glass[i] for i in range(starting_iteration,total_len)],label = "Mackey Glass")
     plt.plot([i for i in range(starting_iteration,total_len)],esn.simulation(total_len-starting_iteration,[mackey_glass[i] for i in range(starting_iteration)]),label = "ESN response")
 
@@ -121,9 +131,9 @@ def compare_MG(esn,starting_iteration):
     plt.show()
 
 
-test= ESN(number_neurons = 100, proba_connexion = 0.2, number_input = 1, number_output = 1, spectral_radius = 0.5)
+test= ESN(number_neurons = 400, proba_connexion = 0.2, number_input = 1, number_output = 1, spectral_radius = 0.5)
 print(max(abs(np.linalg.eig(test.W)[0]))) #Check wether the spectral radius is respected.
-
+test.train([mackey_glass[i] for i in range(1000)],[mackey_glass[i] for i in range(1000)],100)
 
 '''
 test.update(mackey_glass[0])
