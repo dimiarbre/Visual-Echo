@@ -1,7 +1,6 @@
 import numpy as np
 import random
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression
 
 ##Basic functions, used in this particular ESN class. Please note that since it is not a general one, they aren't modulable in this case, and changes has to be done by hand.
 def sigmoid(x):
@@ -29,9 +28,8 @@ class ESN:
         self.number_input = number_input
         self.number_output = number_output
         self.N = number_neurons  #How many neurons in our reservoir
-        self.x = 2*np.random.rand((self.N))-1   #Internal state of the reservoir. Initialisation might change
-        self.y = 2*np.random.rand((self.number_output))-1
-        self.n_iter = 0
+        self.reset_reservoir()
+
         self.leak_rate = leak_rate
         self.W = np.zeros((self.N,self.N))  #The internal weigth matrix
         #The loop will connect the reservoir with a certain probability.
@@ -67,6 +65,10 @@ class ESN:
             self.x = (1-self.leak_rate) * self.x + self.leak_rate * tanh(matrix1 + matrix2 + matrix3 + self.generateNoise())
         else:
             self.x = (1-self.leak_rate) * self.x + self.leak_rate * tanh(matrix1 + matrix2 + matrix3)
+        self.x[0] = 1     #The bias
+        if np.isnan(np.sum(self.x)):
+            raise Exception("Nan in matrix x : {} \n matrix y: {}".format(self.x,self.y))
+
         if (np.array_equal(test,self.x)):
             print("Etat identique",self.n_iter)
 
@@ -79,17 +81,19 @@ class ESN:
         '''
         Simulates the behaviour of the ESN given a starting sequence (initial_inputs) for nb_iter iterations.
         '''
+        self.reset_reservoir()
+        total_iter = len(initial_inputs) + nb_iter
         for input in initial_inputs:
-            self.update(input)
-
-        self.n_iter = 0     #We reset the iterations, and should have an initialised reservoir.
+            self.update(input)  # Warmup period, should have an initialised reservoir at this point.
         predictions = []
-        while self.n_iter < nb_iter:
+
+        while self.n_iter < total_iter:
             predictions.append(self.y)
             self.update()
         return predictions
 
     def train(self,inputs,expected,starting_time):
+        self.reset_reservoir()
         X = np.zeros((len(inputs)-starting_time,self.N+self.number_input+self.number_output))
         G = np.zeros((len(inputs)-starting_time,self.number_output))
         for i in range(starting_time):  #The warmup period
@@ -99,16 +103,25 @@ class ESN:
             self.update(inputs[i],addNoise = True)
             G[i-starting_time] = expected[i-starting_time]
         for j in range(self.number_output):
-            model = LinearRegression()
-            print(X.shape,G[:,j].shape)
-            model.fit(X,G[:,j])
-            newWeights = model.coef_
+            newWeigths = np.dot(np.dot(np.linalg.inv(np.dot(X.transpose(),X)),X.transpose()),G)
+            print(np.array_equal(newWeights,model.coef_))
             print(self.W_out)
             self.W_out[j] = newWeights
             print(self.W_out)
 
     def generateNoise(self):
         return ((2 * np.random.rand(self.number_output)-1) * self.noise) #A random vector beetween -noise and noise
+
+    def reset_reservoir(self):
+        '''
+        Resets the values of the internal states. Warmup should be redone after a call to this function.
+        '''
+        self.n_iter = 0
+        self.x = 2*np.random.rand((self.N))-1   #Internal state of the reservoir. Initialisation might change
+        self.x[0] = 1
+        self.y = 2*np.random.rand((self.number_output))-1
+
+
 
     def save(self,name):
         pass
@@ -124,7 +137,7 @@ mackey_glass = list(map(lambda x : [float(x.split(" ")[1].split("\n")[0])] ,file
 file.close()
 total_len = len(mackey_glass)
 mackey_glass = mackey_glass
-print(total_len)
+
 
 def compare_MG(esn,starting_iteration):
     simu = esn.simulation(nb_iter = total_len-starting_iteration, initial_inputs = [mackey_glass[i] for i in range(starting_iteration)])
@@ -136,7 +149,7 @@ def compare_MG(esn,starting_iteration):
     plt.show()
 
 
-test= ESN(number_neurons = 400, proba_connexion = 0.3, number_input = 1, number_output = 1, spectral_radius = 0.7,leak_rate = 0.9, noise = 0.0001)
+test= ESN(number_neurons = 400, proba_connexion = 0.3, number_input = 1, number_output = 1, spectral_radius = 0.7, leak_rate = 0.9, noise = 0.0001)
 test.W_back *= 0
 print(max(abs(np.linalg.eig(test.W)[0]))) #Check wether the spectral radius is respected.
 
@@ -149,5 +162,5 @@ for i in range(100):
     test.update()
 '''
 
-compare_MG(test,100)
+compare_MG(test,200)
 print(test.x)
