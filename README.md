@@ -17,5 +17,15 @@ The next part consisted in displaying this network, here simply by making it int
 This leads to the main part of the project: to give the neurons a position in the plan, before trying to use different properties and see how it learns.
 This is currently undergoing.
 
-##How to use:
+##How to use it:
 TODO
+
+
+##What is left todo:
+- Switch to a prediction of the sinus function.
+- Properly use the spatialisation
+- Update the display function, and check wether it is working properly.
+
+- Introduce different types of neurons (having different connecting behaviours)
+- Test different properties on the connectivity of the neurons
+ 
