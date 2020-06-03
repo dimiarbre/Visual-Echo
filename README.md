@@ -6,26 +6,25 @@ By using computer graphics methods, I will try to spatialize the reservoir of an
 
 ## What was done:
 
-###Implementation of a basic ESN:
+* :ballot_box_with_check: Implementation of a basic ESN:
 The first step was an implementation of an Echo State Network, in this case to predict Mackey-Glass' series.
 It led to an ESN object, with some basic functions and methods. 
 
-###A basic display:
+* :ballot_box_with_check: A basic display:
 The next part consisted in displaying this network, here simply by making it into a squared image, and showing the evolution of the activation.
 
-###The spatialized ESN:
+* :soon: The spatialized ESN:
 This leads to the main part of the project: to give the neurons a position in the plan, before trying to use different properties and see how it learns.
 This is currently undergoing.
 
-##How to use it:
+## How to use it:
 TODO
 
 
-##What is left todo:
-- Switch to a prediction of the sinus function.
-- Properly use the spatialisation
-- Update the display function, and check wether it is working properly.
-
-- Introduce different types of neurons (having different connecting behaviours)
-- Test different properties on the connectivity of the neurons
+## What is left todo:
+* :soon: Switch to a prediction of the sinus function.
+* :soon: Properly use the spatialisation
+* :soon: Update the display function, and check wether it is working properly.
+* :soon: Introduce different types of neurons (having different connecting behaviours)
+* :soon: Test different properties on the connectivity of the neurons
  
