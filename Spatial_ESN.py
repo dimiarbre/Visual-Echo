@@ -48,7 +48,7 @@ class Spatial_ESN:
             self.squared_size = size
         else:
             self.squared_size = -1
-
+        self.sparsity = sparsity
 
         self.reset_reservoir(completeReset = True)  #Sets the internal states and weight matrixes.
 
@@ -64,20 +64,22 @@ class Spatial_ESN:
 
         self.x = np.zeros((self.N),dtype = [("activity",float),("position",float,(2,)),("mean",float)])
         self.x["activity"] = np.random.uniform(-1,1,(self.N,))   #Internal state of the reservoir. Initialisation might change
+        self.x["activity"] *= 0. #For testing propagation, also a possible initialisation nevertheless
         self.x["mean"] = self.x["activity"]
         self.x["position"] = np.random.uniform(0,1,(self.N,2))
         self.istrained = False
         if completeReset:       #Initialization of the weights.matrixes.
             self.n_iter = 0
             self.W = 0.5 * np.random.uniform(-1,1,(self.N,self.N))  #The internal weight matrix
-
-            self.W *= np.random.uniform(0,1,self.W.shape)<sparsity
+            distances = distance.cdist(self.x["position"],self.x["position"]) #Computes the distances between each nodes, used for
+            self.W *= np.random.uniform(0,1,self.W.shape) < self.sparsity * (1- np.eye(self.N))
             eigenvalue = np.max(np.abs(np.linalg.eigvals(self.W)))
             if eigenvalue == 0.0:
                 print(self.W)
                 raise Exception("Null Maximum Eigenvalue")
             self.W *= spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
             self.W_in = 0.5 * np.random.uniform(-1,1,(self.N, 1 + self.number_input))    #We initialise between -1 and 1 uniformly, maybe to change
+            self.W_in *= (self.x["position"][0]*self.sparsity < (np.random.uniform(0,1,self.W_in.shape)))
             self.W_out = 0.5 * np.random.uniform(-1,1,(self.number_output, (self.N)))
             self.W_back = 0.5 * np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix
 
@@ -91,7 +93,6 @@ class Spatial_ESN:
             input = np.zeros((self.number_input))
         else:
             input = np.array(input)
-        #test = np.copy(self.x) # TODO: Delete test when it is working properly.
         u = 1.0 , input
         matrixA = np.dot(self.W_in, u)
         matrixB = np.dot(self.W , self.x["activity"])
