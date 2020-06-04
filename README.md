@@ -1,5 +1,5 @@
 # Visual-Echo
-Spatialisation of Reservoir computing networks for display purposes.
+Spatialisation of Reservoir computing networks for display and efficiency purposes.
 
 ## The objective
 During this project, I will try to spatialize the reservoir of an Echo-State Network for display purposes, but also to take into account the layout of the human brain. I will additionally try to get interesting properties from this network.
