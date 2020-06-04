@@ -8,12 +8,12 @@ len_training = 1000
 len_warmup = 100
 epsilon = 1e-8
 number_neurons = 30*30
-sparsity = 1
+sparsity = 0.1
 spectral_radius = 1.25
 leak_rate = 0.5
 
-
 np.random.seed(1)
+
 ##Basic functions, used in this particular ESN class. Please note that since it is not a general one, they aren't modulable in this case, and changes has to be done by hand.
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
@@ -64,7 +64,7 @@ class Spatial_ESN:
 
         self.x = np.zeros((self.N),dtype = [("activity",float),("position",float,(2,)),("mean",float)])
         self.x["activity"] = np.random.uniform(-1,1,(self.N,))   #Internal state of the reservoir. Initialisation might change
-        self.x["activity"] *= 0. #For testing propagation, also a possible initialisation nevertheless
+
         self.x["mean"] = self.x["activity"]
         self.x["position"] = np.random.uniform(0,1,(self.N,2))
         self.istrained = False
@@ -78,11 +78,17 @@ class Spatial_ESN:
                 print(self.W)
                 raise Exception("Null Maximum Eigenvalue")
             self.W *= spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
-            self.W_in = 0.5 * np.random.uniform(-1,1,(self.N, 1 + self.number_input))    #We initialise between -1 and 1 uniformly, maybe to change
-            self.W_in *= (self.x["position"][0]*self.sparsity < (np.random.uniform(0,1,self.W_in.shape)))
+            self.W_in = 0.5 * np.random.uniform(-1,1,(self.N, 1 + self.number_input))    #We initialise between -1 and 1 uniformly, maybe to change. The added input will be the bias
+            #To better visualize, but to delete !
+            self.W_in = np.ones((self.N, 1 + self.number_input))
+
+            connexion_in = np.tile(self.x["position"][:,0],(self.number_input + 1,1)).T/(self.sparsity) < (np.random.uniform(0,1,self.W_in.shape))
+            print(np.sum(connexion_in))
+            self.W_in *= connexion_in
+
             self.W_out = 0.5 * np.random.uniform(-1,1,(self.number_output, (self.N)))
             self.W_back = 0.5 * np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix
-
+            self.y = np.zeros((self.number_output))
 
 
     def update(self,input = np.array([]),addNoise = False):
@@ -152,11 +158,11 @@ class Spatial_ESN:
         self.len_warmup = len_warmup
         self.len_training = len_training
         assert len_warmup + len_training <= len(inputs), "Insufficient input size"
-        if reset:
+        if reset :
             self.reset_reservoir()  #initial reset for multiple calls
-        if len_warmup >0:
+        if len_warmup > 0 :
             self.warmup(inputs[:len_warmup])
-        if len_training>0:
+        if len_training > 0 :
             self.train(inputs[len_warmup:len_warmup+len_training],expected[len_warmup:len_warmup+len_training])
         print("---Begining simulation without input---")
         predictions = []
@@ -175,7 +181,7 @@ class Spatial_ESN:
         fig = plt.figure()
         ax = plt.subplot(1,1,1, aspect=1, frameon=False)
         title = ax.set_title("Warmup: Step n°0")
-        scat = ax.scatter(x = self.x["position"][:,0],y = self.x["position"][:,1], c = self.x["activity"], vmin = -1 , vmax = 1,cmap = 'gray',zorder = -100)
+        scat = ax.scatter(x = self.x["position"][:,0],y = self.x["position"][:,1], c = self.x["activity"], vmin = -1 , vmax = 1)
         scat.set_sizes(10*np.ones(self.N))
         plt.colorbar(scat)
         def update_frame(i):
@@ -195,7 +201,7 @@ class Spatial_ESN:
 
     def record_state(self):
         '''
-        Stores an array of the current activation state.
+        Stores an array of the current activity state.
         '''
         assert self.squared_size !=-1, "Non squared number of neurons: {}".format(self.N)
         self.historic.append(np.copy(self.x["activity"]))
@@ -203,6 +209,9 @@ class Spatial_ESN:
 #Mackey glass function import.
 mackey_glass = np.load("mackey-glass.npy")[np.newaxis].T
 total_len = len(mackey_glass)
+
+constant_input = np.ones((10000,1))*100000 #For testing purposes
+mackey_glass = constant_input
 
 
 def compare_MG(esn,nb_iter = -1,displayAnim = True, savename = ""):
@@ -223,6 +232,8 @@ def compare_MG(esn,nb_iter = -1,displayAnim = True, savename = ""):
 #Creating the ESN
 test= Spatial_ESN(number_neurons = number_neurons, sparsity = sparsity, number_input = 1, number_output = 1, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = 0)
 test.W_back *= 0
+test.W *= 0
+test.x["activity"] *= 0. #For testing propagation, also a possible initialisation nevertheless
 
 print(max(abs(np.linalg.eig(test.W)[0]))) #Check wether the spectral radius is respected.
 
