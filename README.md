@@ -1,8 +1,8 @@
 # Visual-Echo
-Spatialisation of Reservoir computing networks for display purposes.
+Spatialisation of Reservoir computing networks for display and efficiency purposes.
 
 ## The objective
-By using computer graphics methods, I will try to spatialize the reservoir of an Echo-State Network for display purposes, but also to take into account the layout of the human brain. I will additionally try to get interesting properties from this network.
+During this project, I will try to spatialize the reservoir of an Echo-State Network for display purposes, but also to take into account the layout of the human brain. I will additionally try to get interesting properties from this network.
 
 ## What was done:
 
@@ -27,4 +27,4 @@ TODO
 * :soon: Update the display function, and check wether it is working properly.
 * :soon: Introduce different types of neurons (having different connecting behaviours)
 * :soon: Test different properties on the connectivity of the neurons
- 
+* :soon: Try to use Voronoi Tesselation for display purpose.  
