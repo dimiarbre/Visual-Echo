@@ -7,11 +7,14 @@ import scipy.spatial.distance as distance
 len_training = 1000
 len_warmup = 100
 epsilon = 1e-8
-number_neurons = 30*30
+number_neurons = 10*10
 sparsity = 0.1
 spectral_radius = 1.25
-leak_rate = 0.5
+leak_rate = 0.4
+display_animation = False
 
+sinus = np.sin(np.arange(start = 0,stop = 1000,step = 1/10))
+#print(sinus.shape)
 np.random.seed(1)
 
 ##Basic functions, used in this particular ESN class. Please note that since it is not a general one, they aren't modulable in this case, and changes has to be done by hand.
@@ -70,25 +73,33 @@ class Spatial_ESN:
         self.istrained = False
         if completeReset:       #Initialization of the weights.matrixes.
             self.n_iter = 0
+
             self.W = 0.5 * np.random.uniform(-1,1,(self.N,self.N))  #The internal weight matrix
             distances = distance.cdist(self.x["position"],self.x["position"]) #Computes the distances between each nodes, used for
-            self.W *= np.random.uniform(0,1,self.W.shape) < self.sparsity * (1- np.eye(self.N))
+        #    self.W *= np.random.uniform(-1,1,self.W.shape) < self.sparsity * (1- np.eye(self.N))
+            intern_connections = distances < np.random.uniform(0,self.sparsity,(distances.shape))
+            self.W *= intern_connections    #Connects spatially
             eigenvalue = np.max(np.abs(np.linalg.eigvals(self.W)))
             if eigenvalue == 0.0:
                 print(self.W)
                 raise Exception("Null Maximum Eigenvalue")
             self.W *= spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
-            self.W_in = 0.5 * np.random.uniform(-1,1,(self.N, 1 + self.number_input))    #We initialise between -1 and 1 uniformly, maybe to change. The added input will be the bias
-            #To better visualize, but to delete !
-            self.W_in = np.ones((self.N, 1 + self.number_input))
 
+            self.W_in = np.random.uniform(-1,1,(self.N, 1 + self.number_input))    #We initialise between -1 and 1 uniformly, maybe to change. The added input will be the bias
+            #self.W_in = np.ones((self.N, 1 + self.number_input)) #To better visualize, but to delete !
             connexion_in = np.tile(self.x["position"][:,0],(self.number_input + 1,1)).T/(self.sparsity) < (np.random.uniform(0,1,self.W_in.shape))
-            print(np.sum(connexion_in))
             self.W_in *= connexion_in
 
-            self.W_out = 0.5 * np.random.uniform(-1,1,(self.number_output, (self.N)))
-            self.W_back = 0.5 * np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix
+            self.W_out = np.random.uniform(-1,1,(self.number_output, (self.N)))
+            connexion_out = (np.tile(1-self.x["position"][:,0],(self.number_output,1)))/(self.sparsity) < (np.random.uniform(0,1,self.W_out.shape))
+            self.W_out *= connexion_out
+
+            self.W_back = np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix, not used in the test cases.
             self.y = np.zeros((self.number_output))
+
+            print("Number of connection to the reservoir : ",np.sum(connexion_in))
+            print("Number of connection inside the reservoir : ",np.sum(intern_connections))
+            print("Number of connection to the output : ",np.sum(connexion_out))
 
 
     def update(self,input = np.array([]),addNoise = False):
@@ -126,7 +137,6 @@ class Spatial_ESN:
         for input in initial_inputs:
             self.update(input)  # Warmup period, should have an initialised reservoir at this point.
         print("---Warmup done---")
-
 
 
     def train(self,inputs,expected):
@@ -210,31 +220,32 @@ class Spatial_ESN:
 mackey_glass = np.load("mackey-glass.npy")[np.newaxis].T
 total_len = len(mackey_glass)
 
-constant_input = np.ones((10000,1))*100000 #For testing purposes
-mackey_glass = constant_input
+
+#constant_input = np.ones((10000,1))*100000 #For testing purposes
+#mackey_glass = constant_input
 
 
-def compare_MG(esn,nb_iter = -1,displayAnim = True, savename = ""):
+def compare_MG(esn,input = mackey_glass,label_input = "Mackey Glass",nb_iter = -1, displayAnim = True, savename = ""):
     display = displayAnim or (savename != "")
     if display:
         esn.begin_record()
     if nb_iter ==-1:
-        nb_iter = len(mackey_glass) - len_warmup - len_training
-    simu = esn.simulation(nb_iter = nb_iter, inputs = mackey_glass,expected = mackey_glass, len_warmup = len_warmup, len_training = len_training, reset = False )
+        nb_iter = len(input) - len_warmup - len_training
+    simu = esn.simulation(nb_iter = nb_iter, inputs = input,expected = input, len_warmup = len_warmup, len_training = len_training, reset = False )
     if display:
         esn.end_record(savename,isDisplayed = displayAnim)
-    plt.plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training),mackey_glass[len_warmup+len_training:nb_iter+len_warmup+len_training],label = "Mackey_glass series")
-    plt.plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training),simu,label = "ESN response")
-
+    plt.plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), input[len_warmup+len_training:nb_iter+len_warmup+len_training],label = label_input)
+    plt.plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), simu, label = "ESN response")
+    plt.title("ESN with {} neurons, sparsity = {}".format(esn.N,esn.sparsity))
     plt.legend()
     plt.show()
 
 #Creating the ESN
 test= Spatial_ESN(number_neurons = number_neurons, sparsity = sparsity, number_input = 1, number_output = 1, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = 0)
 test.W_back *= 0
-test.W *= 0
-test.x["activity"] *= 0. #For testing propagation, also a possible initialisation nevertheless
+#test.W *= 0
+#test.x["activity"] *= 0. #For testing propagation, also a possible initialisation nevertheless
 
 print(max(abs(np.linalg.eig(test.W)[0]))) #Check wether the spectral radius is respected.
 
-compare_MG(test,nb_iter = 2000,displayAnim = True,savename = "")
+compare_MG(test,input = sinus, nb_iter = 2000,displayAnim = display_animation ,savename = "",label_input = "Sinus series")
