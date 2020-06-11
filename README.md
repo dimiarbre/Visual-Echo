@@ -24,13 +24,28 @@ The plan is to try to check to what extent the properties of the ESN are kept, a
 This is currently undergoing.
 
 ## How to use it:
-TODO
+  This program uses an object "Spatial_ESN". To use it effectively, there are several steps required. if you only want to use the plot with a different input series, you can simply:
+
+  * Initialize the "Spatial_ESN" object, given several hyper parameters (see doc of the function for more details): number_neurons, sparsity, number_input, number_output, spectral_radius, leak_rate
+  * Import the data you want as an array.
+  * Use the function compare_result with your data(see doc for the complete )
+
+Everything is almost done by the simulation method. But if you want to do something more specific, here is how it is done:
+  * Initialize the object
+  * Use the begin_record method when you want to start recording the internal state.
+  * Use the warmup method to initialize the reservoir, or manually with a while and the update method.
+  * Train it using the train method (it is very important to use this, else the network can't work unless you do the regression manually)
+  * Use the update method for as long as you want.
+  * Use the end_record method to plot the internal state and eventually save it as a .mp4 file.
 
 
 ## What is left todo:
-
+* :soon: Change the train function, so that only the connected neurons are updated.
+* :soon: use set_aspect (from axis)
+* :soon: use json format
+* :soon: Use neurons modelisation.
 * :soon: Fully check the working of the spatialized ESN
-* :soon: Update the display function, and check wether it is working properly.
+* :soon: Update the display function, and check whether it is working properly.
 * :soon: Introduce different types of neurons (having different connecting behaviours)
 * :soon: Test different properties on the connectivity of the neurons
 * :soon: Try to use Voronoi Tesselation for display purpose.  
