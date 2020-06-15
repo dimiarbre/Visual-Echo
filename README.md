@@ -23,6 +23,12 @@ This leads to the main part of the project: to give the neurons a position in th
 The plan is to try to check to what extent the properties of the ESN are kept, and how to adapt if there are differences.
 This is currently undergoing.
 
+* :ballot_box_with_check: Change the train function, so that only the connected neurons are updated, to truly spatialize the output.
+
+* :ballot_box_with_check: Use json format to be able to redraw figures.
+
+* :clock1: Do some documentation, build bibliography : see related works.
+
 ## How to use it:
   This program uses an object "Spatial_ESN". To use it effectively, there are several steps required. if you only want to use the plot with a different input series, you can simply:
 
@@ -40,12 +46,9 @@ Everything is almost done by the simulation method. But if you want to do someth
 
 
 ## What is left todo:
-* :soon: Change the train function, so that only the connected neurons are updated.
-* :soon: use set_aspect (from axis)
-* :soon: use json format
 * :soon: Use neurons modelisation.
+I should introduce different types of neurons (having different connecting behaviours), and test different properties on the connectivity to see what's efficient.
 * :soon: Fully check the working of the spatialized ESN
 * :soon: Update the display function, and check whether it is working properly.
-* :soon: Introduce different types of neurons (having different connecting behaviours)
-* :soon: Test different properties on the connectivity of the neurons
+For ex, use of a constant input + short total length, just to see how the signal propagates.
 * :soon: Try to use Voronoi Tesselation for display purpose.  

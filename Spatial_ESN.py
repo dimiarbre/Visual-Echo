@@ -10,30 +10,34 @@ import subprocess
 # Default parameters
 _data = {
     "seed"           : 1,
-    "len_training" : 1000,
-    "len_warmup" : 100,
-    "epsilon" : 1e-8,
+    "label_input" : "Sinus",   #"Mackey Glass" or "Sinus" in this case, else must be imported by hand (use the "input" label if you want to use the main())
+    "display_animation" : False,
     "number_neurons" : 10**2,
+    "len_warmup" : 100,
+    "len_training" : 1000,
     "sparsity" : 0.4,          #The probability of connection to the input/output (distance-based)
     "intern_sparsity" : 0.1,   #The probability of connection inside of the reservoir, generally lower
     "spectral_radius" : 1.25,
     "leak_rate" : 0.5,
-    "display_animation" : True,
-    "label_input" : "Mackey Glass",
+    "epsilon" : 1e-8,
     "timestamp"      : "",
     "git_branch"     : "",
     "git_hash"       : "",
 }
 
 
+#----------------------------------------------------------------------------------------------------------------------
 
-
-##Basic functions, used in this particular ESN class. Please note that since it is not a general one, they aren't modulable in this case, and changes has to be done by hand.
+##Basic functions, used in this particular ESN class.
+#Please note that since it is not a general application of ESN, they aren't modulable in this case
+#Znd changes has to be done by hand in the class / by changing those functions under the same name in the file.
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 def tanh(x):
     return np.tanh(x)
+
+#----------------------------------------------------------------------------------------------------------------------
 
 class Spatial_ESN:
     '''
@@ -42,7 +46,7 @@ class Spatial_ESN:
     '''
     def __init__(self,number_neurons, sparsity,intern_sparsity,number_input,number_output,spectral_radius,leak_rate,noise):
         '''
-        Creates an instance of ESN given some parameters
+        Creates an instance of spatial ESN given some parameters
         :parameters:
             - number_neurons : The number of neurons in the reservoir
             - sparsity : Used for the connexion in the spatial reservoir. The higher it is, the more connections there are.
@@ -75,7 +79,8 @@ class Spatial_ESN:
     def reset_reservoir(self,completeReset = False):
         '''
         Resets the values of the internal states. Warmup should be redone after a call to this function.
-        completeReset = True will reset all the weights, used for (re)initialization
+        :parameters:
+            -completeReset,optional: Boolean, False by default, True will reset all the weights, used for (re)initialization. Network will need to be trained again in this case.
         '''
 
         self.x = np.zeros((self.N),dtype = [("activity",float),("position",float,(2,)),("mean",float)])
@@ -88,16 +93,21 @@ class Spatial_ESN:
         if completeReset:       #Initialization of the weights matrixes.
             self.n_iter = 0
 
-            self.W = 0.5 * np.random.uniform(-1,1,(self.N,self.N))  #The internal weight matrix
+            self.W = np.random.uniform(-1,1,(self.N,self.N))  #The internal weight matrix
             distances = distance.cdist(self.x["position"],self.x["position"]) #Computes the distances between each nodes, used for
+            deltax = np.tile(self.x["position"][:,0],(self.N,1))
+            deltax = (deltax - deltax.T)
+            print(np.min(deltax))
         #    self.W *= np.random.uniform(-1,1,self.W.shape) < self.sparsity * (1- np.eye(self.N))
             intern_connections = distances < np.random.uniform(0,self.sparsity,(distances.shape))
-            self.W *= intern_connections * (1-np.eye(self.N))   #Connects spatially
+            self.W *= intern_connections * (1-np.eye(self.N)) * (deltax > 0)   #Connects spatially
             eigenvalue = np.max(np.abs(np.linalg.eigvals(self.W)))
+            '''
             if eigenvalue == 0.0:
                 print(self.W)
                 raise Exception("Null Maximum Eigenvalue")
-            self.W *= spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
+            '''
+            #self.W *= spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
 
             self.W_in = np.random.uniform(-1,1,(self.N, 1 + self.number_input))    #We initialise between -1 and 1 uniformly, maybe to change. The added input will be the bias
             #self.W_in = np.ones((self.N, 1 + self.number_input)) #To better visualize, but to delete !
@@ -114,7 +124,6 @@ class Spatial_ESN:
 
             self.W_back = np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix, not used in the test cases.
             self.y = np.zeros((self.number_output))
-
 
     def update(self,input = np.array([]),addNoise = False):
         '''
@@ -147,11 +156,13 @@ class Spatial_ESN:
         self.x["mean"] = (self.x["mean"]*self.n_iter +self.x["activity"])/(self.n_iter + 1)
 
     def warmup(self,initial_inputs):
+        """
+        Proceeds with the initial warmup, given inputs.
+        """
         print("---Beginning warmup---")
         for input in initial_inputs:
             self.update(input)  # Warmup period, should have an initialised reservoir at this point.
         print("---Warmup done---")
-
 
     def train(self,inputs,expected):
         '''
@@ -272,7 +283,7 @@ class Spatial_ESN:
         plt.show()
         plt.close()
 
-
+#Functions call.
 def compare_result(esn,input,label_input ,len_warmup,len_training,nb_iter = -1, displayAnim = True, savename = ""):
     '''
     Trains the network, and display both the expected result and the network output. Can also save/display the plot of the inner working.
@@ -295,7 +306,7 @@ def compare_result(esn,input,label_input ,len_warmup,len_training,nb_iter = -1, 
     simu = esn.simulation(nb_iter = nb_iter, inputs = input,expected = input, len_warmup = len_warmup, len_training = len_training, reset = False )
     if display:
         esn.end_record(savename,isDisplayed = displayAnim)
-    esn.disp_connectivity(i= -1)
+    esn.disp_connectivity(i= 5)
     plt.plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), input[len_warmup+len_training:nb_iter+len_warmup+len_training],label = label_input)
     plt.plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), simu, label = "ESN response")
     plt.title("ESN with {} neurons, sparsity = {}".format(esn.N,esn.sparsity))
@@ -303,8 +314,7 @@ def compare_result(esn,input,label_input ,len_warmup,len_training,nb_iter = -1, 
     plt.show()
 
 
-
-
+#----------------------------------------------------------------------------------------------------------------------
 #File and json Handling
 
 def get_git_revision_hash():
@@ -345,8 +355,10 @@ def dump(data):
     for key, value in data.items():
         print(f"{key:15s} : {value}")
 
+#----------------------------------------------------------------------------------------------------------------------
 
 if __name__  == "__main__":
+    #Save of parameters. Rename file afterward.
     save("temp.txt", _data)
     data = load("temp.txt")
     dump(data)
