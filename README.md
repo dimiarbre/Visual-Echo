@@ -44,6 +44,10 @@ Everything is almost done by the simulation method. But if you want to do someth
   * Use the update method for as long as you want.
   * Use the end_record method to plot the internal state and eventually save it as a .mp4 file.
 
+## Important notes:
+  This program is designed for a spatial ESN to predict a temporal series. This means that the expected output is always the input (delayed or not), ie of the same dimension. Some changes would be needed to adapt to different output (use of W_back for exemple, but this would mean changing the training too). However, they were not done since it was not a priority at the moment.
+
+  Additionally, it has only been tested on 1 dimensional input/output (sinus and Mackey glass). Please note there may be errors on data of higher dimension (especially because of the way vectors are handled in numpy, and the use of np.newaxis).
 
 ## What is left todo:
 * :soon: Use neurons modelisation.

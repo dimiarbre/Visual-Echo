@@ -10,11 +10,13 @@ import subprocess
 # Default parameters
 _data = {
     "seed"           : 1,
-    "label_input" : "Sinus",   #"Mackey Glass" or "Sinus" in this case, else must be imported by hand (use the "input" label if you want to use the main())
-    "display_animation" : False,
-    "number_neurons" : 10**2,
-    "len_warmup" : 100,
-    "len_training" : 1000,
+    "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
+    "display_animation" : True,
+    "savename" : "", #The file where the animation is saved
+    "number_neurons" : 20**2,
+    "len_warmup" : 100,                #100,
+    "len_training" : 1000,             #1000,
+    "simulation_len" : 2000,
     "sparsity" : 0.4,          #The probability of connection to the input/output (distance-based)
     "intern_sparsity" : 0.1,   #The probability of connection inside of the reservoir, generally lower
     "spectral_radius" : 1.25,
@@ -96,7 +98,7 @@ class Spatial_ESN:
             self.W = np.random.uniform(-1,1,(self.N,self.N))  #The internal weight matrix
             distances = distance.cdist(self.x["position"],self.x["position"]) #Computes the distances between each nodes, used for
             deltax = np.tile(self.x["position"][:,0],(self.N,1))
-            deltax = (deltax - deltax.T)
+            deltax = (deltax.T - deltax)
             print(np.min(deltax))
         #    self.W *= np.random.uniform(-1,1,self.W.shape) < self.sparsity * (1- np.eye(self.N))
             intern_connections = distances < np.random.uniform(0,self.sparsity,(distances.shape))
@@ -110,6 +112,7 @@ class Spatial_ESN:
             #self.W *= spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
 
             self.W_in = np.random.uniform(-1,1,(self.N, 1 + self.number_input))    #We initialise between -1 and 1 uniformly, maybe to change. The added input will be the bias
+
             #self.W_in = np.ones((self.N, 1 + self.number_input)) #To better visualize, but to delete !
             connexion_in = np.tile(self.x["position"][:,0],(self.number_input + 1,1)).T/(self.intern_sparsity) < (np.random.uniform(0,1,self.W_in.shape))
             self.W_in *= connexion_in
@@ -214,17 +217,54 @@ class Spatial_ESN:
         self.historic = []
         self.record_state()
 
-    def end_record(self,name,isDisplayed = False):
+    def draw_histogram(self,bin_len):
+        "Draws an histogram of the activity, binned. To see propagation"
         fig = plt.figure()
-        ax = plt.subplot(1,1,1, aspect=1, frameon=False)
-        title = ax.set_title("Warmup: Step n°0")
-        scat = ax.scatter(x = self.x["position"][:,0],y = self.x["position"][:,1], c = self.x["activity"], vmin = -1 , vmax = 1)
-        scat.set_sizes(10*np.ones(self.N))
-        plt.colorbar(scat)
+
+
+
+
+        #We take the mean inside the bin interval
+        plt.ylim(ymin = -1, ymax = 1)
+
+        bar = plt.bar(bins[:-1] + bin_len,value,width = bin_len)
+        def update(j):
+            plt.cla()
+            #plt.ylim(ymin = -1, ymax = 1)
+
+        anim = animation.FuncAnimation(fig, update,frames = np.arange(1,len(self.historic)),interval = 25)
+        plt.show()
+        plt.close()
+
+    def end_record(self,name,bin_len = 0.1,isDisplayed = False):
+        figure, axes = plt.subplots(nrows = 2,ncols = 1,sharex = True, frameon=False)
+        title = figure.suptitle("Warmup: Step n°0")
+
+        #Initialisation of the scatterplot
+        scat = axes[0].scatter(x = self.x["position"][:,0],y = self.x["position"][:,1], c = self.x["activity"], vmin = -1 , vmax = 1)
+        scat.set_sizes(10 * np.ones(self.N))
+        axes[0].set_title("Neurons position and activity")
+        #plt.colorbar(scat)
+
+        bins = np.arange(0, 1 + bin_len, bin_len)
+        bin_position = np.array([(self.x["position"][:,0] >= bins[i]) * (self.x["position"][:,0] < bins[i+1]) for i in range(len(bins)-1)])
+        value = [np.mean(self.historic[0]*(self.x["position"][:,0] >= bins[i]) * (self.x["position"][:,0] < bins[i+1])) for i in range(len(bins)-1)]
+        bar = axes[1].bar(bins[:-1] + bin_len / 2 ,value,width = bin_len)
+        axes[1].set_title("Mean value of activity according to x position")
         def update_frame(i):
+            #Update of the neurons display
             scat.set_array(self.historic[i])
-            ax.set_title("{}: Step n°{}".format("Warmup" if i < len_warmup else ("Training" if i < len_warmup + len_training else "Prediction"),i))
-        anim = animation.FuncAnimation(fig, update_frame,frames = np.arange(1,len(self.historic)),interval = 25)
+            title.set_text("{}: Step n°{}".format("Warmup" if i < len_warmup else ("Training" if i < len_warmup + len_training else "Prediction"),i))
+
+            #Update of the histogram
+
+            value = [np.mean(self.historic[i]*(self.x["position"][:,0] >= bins[j]) * (self.x["position"][:,0] < bins[j+1])) for j in range(len(bins)-1)]
+            #We take the mean inside the bin interval
+            for rect,h in zip(bar,value):
+                rect.set_height(h)
+            return scat,bar
+
+        anim = animation.FuncAnimation(figure, update_frame,frames = np.arange(1,len(self.historic)),interval = 25)
         if name != "":
             print("---Saving the animation---")
             anim.save(name+".mp4", fps=30)
@@ -233,6 +273,7 @@ class Spatial_ESN:
             plt.show()
 
         plt.close()
+        #self.draw_histogram(0.1)
         self.isRecording = False
         self.historic = []
 
@@ -277,11 +318,13 @@ class Spatial_ESN:
                         #axes[2].plot(self.x["position"][i,0],self.x["position"][i,1], self.x["position"][j,0], self.x["position"][j,1])
         else:
             for j in range(self.N):
-                if self.W[i,j] != 0:
+                if self.W[j,i] != 0:
                     l = axes[2].arrow(self.x["position"][i,0],self.x["position"][i,1],(self.x["position"][j,0] - self.x["position"][i,0]), (self.x["position"][j,1]- self.x["position"][i,1]),lw = 0.1,color = 'Red')
-        axes[2].set_title("Intern connection "+("for a single neuron" if i ==-1 else "for all neurons"))
+        axes[2].set_title("Intern connection "+("for a single neuron" if i !=-1 else "for all neurons"))
         plt.show()
         plt.close()
+
+
 
 #Functions call.
 def compare_result(esn,input,label_input ,len_warmup,len_training,nb_iter = -1, displayAnim = True, savename = ""):
@@ -303,10 +346,11 @@ def compare_result(esn,input,label_input ,len_warmup,len_training,nb_iter = -1, 
         esn.begin_record()
     if nb_iter ==-1:
         nb_iter = len(input) - len_warmup - len_training
+    print("Nb_iter: ",nb_iter)
     simu = esn.simulation(nb_iter = nb_iter, inputs = input,expected = input, len_warmup = len_warmup, len_training = len_training, reset = False )
     if display:
         esn.end_record(savename,isDisplayed = displayAnim)
-    esn.disp_connectivity(i= 5)
+    esn.disp_connectivity(i=-1)
     plt.plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), input[len_warmup+len_training:nb_iter+len_warmup+len_training],label = label_input)
     plt.plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), simu, label = "ESN response")
     plt.title("ESN with {} neurons, sparsity = {}".format(esn.N,esn.sparsity))
@@ -372,8 +416,15 @@ if __name__  == "__main__":
         input = np.load("mackey-glass.npy")[np.newaxis].T
     elif label_input == "Sinus":
         input = np.sin(np.arange(start = 0,stop = 1000,step = 1/10))
+    elif label_input == "Constant":
+        input = 1 * np.ones((1000000))
     #Creating the ESN
+    print("input", len(input))
     test= Spatial_ESN(number_neurons = number_neurons, sparsity = sparsity,intern_sparsity = intern_sparsity, number_input = 1, number_output = 1, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = 0)
     test.W_back *= 0
+    test.x["activity"]*=0
+    #test.W_in = (test.W_in != 0)
+    #test.W = (test.W != 0)
+
     print("Effective spectral radius :",max(abs(np.linalg.eig(test.W)[0]))) #Check wether the spectral radius is respected.
-    compare_result(test,input = input,len_warmup = len_warmup,len_training = len_training, nb_iter = 2000,displayAnim = display_animation ,savename = "",label_input = label_input + " series")
+    compare_result(test,input = input,len_warmup = len_warmup,len_training = len_training, nb_iter = simulation_len,displayAnim = display_animation ,savename = savename,label_input = label_input + " series")
