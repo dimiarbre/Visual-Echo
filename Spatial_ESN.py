@@ -3,7 +3,7 @@ import random
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import scipy.spatial.distance as distance
-import scipy.spatial.Voronoi as voronoi
+from scipy.spatial import Voronoi
 import json
 import time
 import subprocess
@@ -12,7 +12,7 @@ from math import ceil
 # Default parameters
 _data = {
     "seed"           : 1,
-    "label_input" : "Constant",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
+    "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
     "display_animation" : False,
     "neuron_displayed" : None,     #Should be: None if not wanted, else -1 for the whole connectivity, else the n° of the neuron.
     "savename" : "",             #The file where the animation is saved
