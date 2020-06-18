@@ -3,25 +3,30 @@ import random
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import scipy.spatial.distance as distance
+import scipy.spatial.Voronoi as voronoi
 import json
 import time
 import subprocess
+from math import ceil
 
 # Default parameters
 _data = {
     "seed"           : 1,
-    "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
-    "display_animation" : True,
-    "savename" : "", #The file where the animation is saved
-    "number_neurons" : 20**2,
-    "len_warmup" : 100,                #100,
+    "label_input" : "Constant",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
+    "display_animation" : False,
+    "neuron_displayed" : None,     #Should be: None if not wanted, else -1 for the whole connectivity, else the n° of the neuron.
+    "savename" : "",             #The file where the animation is saved
+    "number_neurons" : 10**2,
+    "len_warmup" : 200,                #100,
     "len_training" : 1000,             #1000,
     "simulation_len" : 2000,
-    "sparsity" : 0.4,          #The probability of connection to the input/output (distance-based)
-    "intern_sparsity" : 0.1,   #The probability of connection inside of the reservoir, generally lower
+    "delays" : [0,3,4,10,50,60,100,150],
+    "sparsity" : 0.2,          #The probability of connection to the input/output (distance-based)
+    "intern_sparsity" : 0.05,   #The probability of connection inside of the reservoir, generally lower
     "spectral_radius" : 1.25,
-    "leak_rate" : 0.5,
+    "leak_rate" : 0.3,         #The greater it is, the more a neuron will lose its previous activity
     "epsilon" : 1e-8,
+    "bin_size" : 0.05,
     "timestamp"      : "",
     "git_branch"     : "",
     "git_hash"       : "",
@@ -71,6 +76,7 @@ class Spatial_ESN:
             self.squared_size = -1
         self.sparsity = sparsity
         self.intern_sparsity = intern_sparsity
+        self.spectral_radius = spectral_radius
 
         self.reset_reservoir(completeReset = True)  #Sets the internal states and weight matrixes.
 
@@ -99,7 +105,7 @@ class Spatial_ESN:
             distances = distance.cdist(self.x["position"],self.x["position"]) #Computes the distances between each nodes, used for
             deltax = np.tile(self.x["position"][:,0],(self.N,1))
             deltax = (deltax.T - deltax)
-            print(np.min(deltax))
+
         #    self.W *= np.random.uniform(-1,1,self.W.shape) < self.sparsity * (1- np.eye(self.N))
             intern_connections = distances < np.random.uniform(0,self.sparsity,(distances.shape))
             self.W *= intern_connections * (1-np.eye(self.N)) * (deltax > 0)   #Connects spatially
@@ -109,7 +115,7 @@ class Spatial_ESN:
                 print(self.W)
                 raise Exception("Null Maximum Eigenvalue")
             '''
-            #self.W *= spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
+            #self.W *= self.spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
 
             self.W_in = np.random.uniform(-1,1,(self.N, 1 + self.number_input))    #We initialise between -1 and 1 uniformly, maybe to change. The added input will be the bias
 
@@ -119,7 +125,7 @@ class Spatial_ESN:
 
             self.W_out = np.random.uniform(-1,1,(self.N,self.number_output))
             #self.connexion_out = np.tile(1-self.x["position"][:,0],(self.number_output,1)).T < (np.random.uniform(0,self.sparsity,self.W_out.shape))
-            self.connexion_out = (1-self.x["position"][:,0]) < (np.random.uniform(0,self.sparsity,self.N))  #The neurons connected are connected to all of the exit neurons. (Makes the training easier)
+            self.connexion_out = (1-self.x["position"][:,0]) < (np.random.uniform(0,self.sparsity,self.N))  #The neurons connected to the output are connected to all of the exit neurons. (Makes the training easier)
             if self.number_output == 1:
                 self.W_out *= np.tile(self.connexion_out[np.newaxis].T,(self.number_output,1))
             else:
@@ -128,7 +134,7 @@ class Spatial_ESN:
             self.W_back = np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix, not used in the test cases.
             self.y = np.zeros((self.number_output))
 
-    def update(self,input = np.array([]),addNoise = False):
+    def update(self,input = np.array([]) ,addNoise = False):
         '''
         Advance the process by 1 step, given some input if needed.
         '''
@@ -139,24 +145,23 @@ class Spatial_ESN:
         u = 1.0 , input
         matrixA = np.dot(self.W_in, u)
         matrixB = np.dot(self.W , self.x["activity"])
-        matrixC = 0 #self.W_back @ self.y
+        matrixC = 0 #self.W_back @ self.y #Feature deactivated and not tested in this particular case.
         if addNoise:
             self.x["activity"] = (1-self.leak_rate) * self.x["activity"] + self.leak_rate * tanh(matrixA + matrixB + matrixC + self.generateNoise())
         else:
             self.x["activity"] = (1-self.leak_rate) * self.x["activity"] + self.leak_rate * tanh(matrixA + matrixB + matrixC)
-        if np.isnan(np.sum(self.x["activity"])):
+
+        if np.isnan(np.sum(self.x["activity"])):    #Mostly for debugging purposes.
             raise Exception("Nan in matrix x : {} \n matrix y: {}".format(self.x["activity"],self.y))
 
         if self.isRecording:
             self.record_state()
 
         if self.istrained:
-            self.y = np.dot(self.W_out,self.x["activity"])                     #We use a linear output.
-        else:
-            self.y = input
-            #print(input-self.y)
+            self.y = np.dot(self.W_out,self.x["activity"])                     #We use a linear output (no postfunction treatment, should change training if one is added).
+
         self.n_iter +=1
-        self.x["mean"] = (self.x["mean"]*self.n_iter +self.x["activity"])/(self.n_iter + 1)
+        self.x["mean"] = (self.x["mean"] * self.n_iter + self.x["activity"]) / (self.n_iter + 1)
 
     def warmup(self,initial_inputs):
         """
@@ -169,23 +174,25 @@ class Spatial_ESN:
 
     def train(self,inputs,expected):
         '''
-        Trains the ESN given an input, for all the duration of the input, using linear regression. This should change when spatialized.
+        Trains the ESN given an input, for all the duration of the input, using linear regression.
+        The objective of the ESN will be to match the expected result, simulated with the given inputs. It should then be able to evolve on its own.
+        inputs and expected should be of the same size.
         '''
         print("---Beginning training---")
         X = np.zeros((len(inputs),self.N))
         for i in range(1,len(inputs)):
-            X[i] = self.x["activity"]*self.connexion_out
+            X[i] = self.x["activity"]*self.connexion_out    #So that the regression only sees the neurons connected to the output.
             self.update(inputs[i],addNoise = True)
         newWeights = np.dot(np.dot(expected.T,X), np.linalg.inv(np.dot(X.T,X) + epsilon*np.eye(self.N)))
         self.W_out = newWeights
         print("---Training done---")
         self.istrained = True
-        self.y =  np.dot(self.W_out,self.x["activity"])   #Output state of the reservoir. It is directly computed from the internal state, and will allow a free-run later
+        self.y = expected[-1]   #Output state of the reservoir. After this, it will be computed from the state of the
 
     def generateNoise(self):
         return np.random.uniform(-self.noise,self.noise,(self.number_output)) #A random vector beetween -noise and noise
 
-    def simulation(self,inputs,expected, nb_iter,len_warmup = 0 ,len_training = 0,reset = False):
+    def simulation(self, nb_iter, inputs = [],expected = [],len_warmup = 0 ,len_training = 0, delay = 0, reset = False):
         '''
         Simulates the behaviour of the ESN given :
         - input : a starting sequence, wich will be followed.
@@ -193,6 +200,7 @@ class Spatial_ESN:
         - len_warmup: number of iterations of the warmup sequence.
         - len_training: number of iteration of the training sequence.
         - reset: wether the coeffs of the ESN are reset or not. This will not undo training, and you must use reset_reservoir manually if you want to.
+
         Input must at least be of length len_warmup + len_training.
         '''
         self.len_warmup = len_warmup
@@ -203,7 +211,7 @@ class Spatial_ESN:
         if len_warmup > 0 :
             self.warmup(inputs[:len_warmup])
         if len_training > 0 :
-            self.train(inputs[len_warmup:len_warmup+len_training],expected[len_warmup:len_warmup+len_training])
+            self.train(inputs[len_warmup:len_warmup+len_training],expected[:len_training])
         print("---Begining simulation without input---")
         predictions = []
         for _ in range(nb_iter):
@@ -324,10 +332,21 @@ class Spatial_ESN:
         plt.show()
         plt.close()
 
-
+    def copy(self):
+        buffer = Spatial_ESN(number_neurons = self.N, sparsity = self.sparsity,intern_sparsity = self.intern_sparsity,number_input = self.number_input,number_output = self.number_output,\
+        spectral_radius = self.spectral_radius,leak_rate = self.leak_rate,noise = self.noise)
+        buffer.W = np.copy(self.W)
+        buffer.W_in = np.copy(self.W_in)
+        buffer.W_out = np.copy(self.W_out)
+        buffer.connexion_out = np.copy(self.connexion_out)
+        buffer.W_back = np.copy(self.W_back)
+        buffer.x = np.copy(self.x)
+        buffer.y = np.copy(self.y)
+        buffer.n_iter = self.n_iter
+        return buffer
 
 #Functions call.
-def compare_result(esn,input,label_input ,len_warmup,len_training,nb_iter = -1, displayAnim = True, savename = ""):
+def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = [0],nb_iter = -1, display_anim = True, neuron_displayed = None,bin_size = 0.1, savename = ""):
     '''
     Trains the network, and display both the expected result and the network output. Can also save/display the plot of the inner working.
     Inputs:
@@ -340,22 +359,52 @@ def compare_result(esn,input,label_input ,len_warmup,len_training,nb_iter = -1, 
         - displayAnim : Wether the internal state is plotted
         - savename: optionnal, where the .mp4 is generated. If not filled, it won't be generated.
     '''
-    display = displayAnim or (savename != "")
+    display = display_anim or (savename != "")
     #esn.disp_connectivity()
     if display:
         esn.begin_record()
     if nb_iter ==-1:
         nb_iter = len(input) - len_warmup - len_training
     print("Nb_iter: ",nb_iter)
-    simu = esn.simulation(nb_iter = nb_iter, inputs = input,expected = input, len_warmup = len_warmup, len_training = len_training, reset = False )
+
+    simus = []
+    for i in range(len(delays)-1):
+        expected = input[len_warmup - delays[i]:len_warmup - delays[i] + len_training] #The awaited results during the training. delays allow to offset the expected result, due to delay to cross the reservoir.
+        copy = esn.copy()
+        simus.append(copy.simulation(nb_iter = nb_iter, inputs = input, expected = expected, len_warmup = len_warmup, len_training = len_training, reset = False ))
+
+    expected = input[len_warmup - delays[-1]:len_warmup - delays[-1] + len_training] #The awaited results during the training.
+    simus.append(esn.simulation(nb_iter = nb_iter, inputs = input, expected = expected, len_warmup = len_warmup, len_training = len_training, reset = False))
     if display:
-        esn.end_record(savename,isDisplayed = displayAnim)
-    esn.disp_connectivity(i=-1)
-    plt.plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), input[len_warmup+len_training:nb_iter+len_warmup+len_training],label = label_input)
-    plt.plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), simu, label = "ESN response")
-    plt.title("ESN with {} neurons, sparsity = {}".format(esn.N,esn.sparsity))
-    plt.legend()
+        esn.end_record(savename, bin_len = bin_size, isDisplayed = display_anim)
+    if neuron_displayed != None:
+        esn.disp_connectivity(i = neuron_displayed)
+
+    #Plot Handling. More complicated than necessary, but should be able to adapt to any number of delay input (still must be visible)
+    nb_cols = 2 if len(delays) != 1 else 1
+    nb_lines = ceil(len(delays)/2) if len(delays) > 2 else 1
+
+    fig,axes = plt.subplots(nrows = nb_lines, ncols = nb_cols, sharex = True, sharey = True)
+    if nb_cols == 1:
+        axes = [[axes]]
+    elif nb_lines == 1:
+        axes = [axes]
+    i,j = 0,0
+    while nb_cols*(i) + j+1 <= len(delays):
+        axes[i][j].plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), input[len_warmup + len_training - delays[nb_cols*i + j] : nb_iter + len_warmup + len_training - delays[nb_cols*i + j]],label = label_input)
+        axes[i][j].plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), simus[nb_cols*i + j],'--', label = "ESN response")
+        axes[i][j].set_title("Delay: {} steps".format(delays[nb_cols*i + j]))
+        if j == nb_cols - 1:
+            j=0
+            i+=1
+        else:
+            j+=1
+
+    fig.suptitle("ESN with {} neurons\n sparsity toward external neurons {}\n internal sparsity {}".format(esn.N,esn.sparsity,esn.intern_sparsity))
+    fig.tight_layout(pad=3.0)
+    #plt.legend()
     plt.show()
+
 
 
 #----------------------------------------------------------------------------------------------------------------------
@@ -417,7 +466,7 @@ if __name__  == "__main__":
     elif label_input == "Sinus":
         input = np.sin(np.arange(start = 0,stop = 1000,step = 1/10))
     elif label_input == "Constant":
-        input = 1 * np.ones((1000000))
+        input = 10 * np.ones((1000000))
     #Creating the ESN
     print("input", len(input))
     test= Spatial_ESN(number_neurons = number_neurons, sparsity = sparsity,intern_sparsity = intern_sparsity, number_input = 1, number_output = 1, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = 0)
@@ -425,6 +474,6 @@ if __name__  == "__main__":
     test.x["activity"]*=0
     #test.W_in = (test.W_in != 0)
     #test.W = (test.W != 0)
-
     print("Effective spectral radius :",max(abs(np.linalg.eig(test.W)[0]))) #Check wether the spectral radius is respected.
-    compare_result(test,input = input,len_warmup = len_warmup,len_training = len_training, nb_iter = simulation_len,displayAnim = display_animation ,savename = savename,label_input = label_input + " series")
+    compare_prediction(test,input = input,len_warmup = len_warmup, len_training = len_training, delays = delays, nb_iter = simulation_len,display_anim = display_animation,\
+        neuron_displayed = neuron_displayed ,bin_size = bin_size,savename = savename,label_input = label_input + " series")
