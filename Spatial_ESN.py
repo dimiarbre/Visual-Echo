@@ -334,7 +334,7 @@ class Spatial_ESN:
 
     def copy(self):
         buffer = Spatial_ESN(number_neurons = self.N, sparsity = self.sparsity,intern_sparsity = self.intern_sparsity,number_input = self.number_input,number_output = self.number_output,\
-        spectral_radius = self.spectral_radius,leak_rate = self.leak_rate,noise = self.noise)
+            spectral_radius = self.spectral_radius,leak_rate = self.leak_rate,noise = self.noise)
         buffer.W = np.copy(self.W)
         buffer.W_in = np.copy(self.W_in)
         buffer.W_out = np.copy(self.W_out)
