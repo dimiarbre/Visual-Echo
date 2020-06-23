@@ -14,13 +14,13 @@ _data = {
     "seed"           : 1,
     "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
     "display_animation" : False,
-    "neuron_displayed" : None,     #Should be: None if not wanted, else -1 for the whole connectivity, else the n° of the neuron.
+    "neuron_displayed" : -1,     #Should be: None if not wanted, else -1 for the whole connectivity, else the n° of the neuron.
     "savename" : "",             #The file where the animation is saved
     "number_neurons" : 10**2,
     "len_warmup" : 200,                #100,
     "len_training" : 1000,             #1000,
     "simulation_len" : 2000,
-    "delays" : [0,3,4,10,50,60,100,150],
+    "delays" : [0],
     "sparsity" : 0.2,          #The probability of connection to the input/output (distance-based)
     "intern_sparsity" : 0.05,   #The probability of connection inside of the reservoir, generally lower
     "spectral_radius" : 1.25,
@@ -102,7 +102,7 @@ class Spatial_ESN:
             self.n_iter = 0
 
             self.W = np.random.uniform(-1,1,(self.N,self.N))  #The internal weight matrix
-            distances = distance.cdist(self.x["position"],self.x["position"]) #Computes the distances between each nodes, used for
+            distances = distance.cdist(self.x["position"],self.x["position"]) #Computes the distances between each nodes, used for the probability of connexion.
             deltax = np.tile(self.x["position"][:,0],(self.N,1))
             deltax = (deltax.T - deltax)
 
@@ -225,25 +225,6 @@ class Spatial_ESN:
         self.historic = []
         self.record_state()
 
-    def draw_histogram(self,bin_len):
-        "Draws an histogram of the activity, binned. To see propagation"
-        fig = plt.figure()
-
-
-
-
-        #We take the mean inside the bin interval
-        plt.ylim(ymin = -1, ymax = 1)
-
-        bar = plt.bar(bins[:-1] + bin_len,value,width = bin_len)
-        def update(j):
-            plt.cla()
-            #plt.ylim(ymin = -1, ymax = 1)
-
-        anim = animation.FuncAnimation(fig, update,frames = np.arange(1,len(self.historic)),interval = 25)
-        plt.show()
-        plt.close()
-
     def end_record(self,name,bin_len = 0.1,isDisplayed = False):
         figure, axes = plt.subplots(nrows = 2,ncols = 1,sharex = True, frameon=False)
         title = figure.suptitle("Warmup: Step n°0")
@@ -259,6 +240,7 @@ class Spatial_ESN:
         value = [np.mean(self.historic[0]*(self.x["position"][:,0] >= bins[i]) * (self.x["position"][:,0] < bins[i+1])) for i in range(len(bins)-1)]
         bar = axes[1].bar(bins[:-1] + bin_len / 2 ,value,width = bin_len)
         axes[1].set_title("Mean value of activity according to x position")
+
         def update_frame(i):
             #Update of the neurons display
             scat.set_array(self.historic[i])
@@ -281,7 +263,6 @@ class Spatial_ESN:
             plt.show()
 
         plt.close()
-        #self.draw_histogram(0.1)
         self.isRecording = False
         self.historic = []
 
@@ -314,11 +295,12 @@ class Spatial_ESN:
         axes[0].set_title("Neurons connected to the input")
         axes[1].set_title("Neurons connected to the output")
 
-        axes[2].scatter(self.x["position"][:,0], self.x["position"][:,1])
+        colormap = np.array(['b','r', 'g','y'])            #Used for viewing connectivity upon click in the plot.
+        positionScatter = axes[2].scatter(self.x["position"][:,0], self.x["position"][:,1],c = colormap[0],cmap = colormap)
         axes[2].set_aspect(1)
         axes[1].set_aspect(1)
         axes[0].set_aspect(1)
-        if i == -1:
+        if i == -1:          #The case where we display all the connections.
             for i in range(self.N):
                 for j in range(self.N):
                     if self.W[i,j] != 0:
@@ -329,11 +311,35 @@ class Spatial_ESN:
                 if self.W[j,i] != 0:
                     l = axes[2].arrow(self.x["position"][i,0],self.x["position"][i,1],(self.x["position"][j,0] - self.x["position"][i,0]), (self.x["position"][j,1]- self.x["position"][i,1]),lw = 0.1,color = 'Red')
         axes[2].set_title("Intern connection "+("for a single neuron" if i !=-1 else "for all neurons"))
+
+        def onclick(event):
+            index = self.get_nearest_index(event.xdata,event.ydata)
+            print("Clicked on neuron {}, with position {}".format(index,self.x["position"][index]))
+            newColors = []
+            for j in range(self.N):
+                if j != index:
+                    if self.W[j,index] != 0:
+                        newColors.append(colormap[1])
+                    elif self.W[index,j] != 0:
+                        newColors.append(colormap[2])
+                    else:
+                        newColors.append(colormap[0])
+                else:
+                        newColors.append(colormap[3])
+
+            positionScatter.set_array(np.array(newColors))             #Updates the colors.
+            figure.canvas.draw()                                       #Updates visually
+
+        figure.canvas.mpl_connect('button_press_event',onclick)
         plt.show()
         plt.close()
 
     def copy(self):
-        buffer = Spatial_ESN(number_neurons = self.N, sparsity = self.sparsity,intern_sparsity = self.intern_sparsity,number_input = self.number_input,number_output = self.number_output,\
+        '''
+        Returns an independent copy of the current ESN. Used to compare different ESN with same initialization.
+        '''
+        buffer = Spatial_ESN(number_neurons = self.N, sparsity = self.sparsity,intern_sparsity = self.intern_sparsity, \
+            number_input = self.number_input,number_output = self.number_output,\
             spectral_radius = self.spectral_radius,leak_rate = self.leak_rate,noise = self.noise)
         buffer.W = np.copy(self.W)
         buffer.W_in = np.copy(self.W_in)
@@ -345,6 +351,17 @@ class Spatial_ESN:
         buffer.n_iter = self.n_iter
         return buffer
 
+    def get_nearest_index(self,x,y):
+        '''
+        Given a position in the plane, returns the index of the nearest neuron
+        Input: two floats.
+        Output: returns a tuple
+        '''
+        distances = distance.cdist(self.x["position"],[[x,y]])
+        ind = np.unravel_index(np.argmin(distances, axis=None), distances.shape) #Gets the index of the minimum of the distances array
+        return(ind[0])
+
+#----------------------------------------------------------------------------------------------------------------------
 #Functions call.
 def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = [0],nb_iter = -1, display_anim = True, neuron_displayed = None,bin_size = 0.1, savename = ""):
     '''
@@ -406,9 +423,8 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
     plt.show()
 
 
-
 #----------------------------------------------------------------------------------------------------------------------
-#File and json Handling
+#File and json handling
 
 def get_git_revision_hash():
     """ Get current git hash """
@@ -458,22 +474,24 @@ if __name__  == "__main__":
     locals().update(data)
     save("temp.txt")
 
+    #Beginning of execution
     np.random.seed(seed)
 
-    #Mackey glass function import.
+    #Training and samplig dataset import.
     if label_input == "Mackey Glass":
         input = np.load("mackey-glass.npy")[np.newaxis].T
     elif label_input == "Sinus":
         input = np.sin(np.arange(start = 0,stop = 1000,step = 1/10))
     elif label_input == "Constant":
         input = 10 * np.ones((1000000))
+
     #Creating the ESN
-    print("input", len(input))
     test= Spatial_ESN(number_neurons = number_neurons, sparsity = sparsity,intern_sparsity = intern_sparsity, number_input = 1, number_output = 1, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = 0)
     test.W_back *= 0
     test.x["activity"]*=0
     #test.W_in = (test.W_in != 0)
     #test.W = (test.W != 0)
     print("Effective spectral radius :",max(abs(np.linalg.eig(test.W)[0]))) #Check wether the spectral radius is respected.
+
     compare_prediction(test,input = input,len_warmup = len_warmup, len_training = len_training, delays = delays, nb_iter = simulation_len,display_anim = display_animation,\
         neuron_displayed = neuron_displayed ,bin_size = bin_size,savename = savename,label_input = label_input + " series")
