@@ -56,7 +56,7 @@ class Spatial_ESN:
         Creates an instance of spatial ESN given some parameters
         :parameters:
             - number_neurons : The number of neurons in the reservoir
-            - sparsity : Used for the connexion in the spatial reservoir. The higher it is, the more connections there are.
+            - sparsity : Used for the connection in the spatial reservoir. The higher it is, the more connections there are.
             - number_input : How many input neurons.
             - number_output : How many output neurons.
             - spectral_radius : the desired spectral radius, depending on how lastong we want the memory to be.
@@ -102,7 +102,7 @@ class Spatial_ESN:
             self.n_iter = 0
 
             self.W = np.random.uniform(-1,1,(self.N,self.N))  #The internal weight matrix
-            distances = distance.cdist(self.x["position"],self.x["position"]) #Computes the distances between each nodes, used for the probability of connexion.
+            distances = distance.cdist(self.x["position"],self.x["position"]) #Computes the distances between each nodes, used for the probability of connection.
             deltax = np.tile(self.x["position"][:,0],(self.N,1))
             deltax = (deltax.T - deltax)
 
@@ -120,16 +120,16 @@ class Spatial_ESN:
             self.W_in = np.random.uniform(-1,1,(self.N, 1 + self.number_input))    #We initialise between -1 and 1 uniformly, maybe to change. The added input will be the bias
 
             #self.W_in = np.ones((self.N, 1 + self.number_input)) #To better visualize, but to delete !
-            connexion_in = np.tile(self.x["position"][:,0],(self.number_input + 1,1)).T/(self.intern_sparsity) < (np.random.uniform(0,1,self.W_in.shape))
-            self.W_in *= connexion_in
+            connection_in = np.tile(self.x["position"][:,0],(self.number_input + 1,1)).T/(self.intern_sparsity) < (np.random.uniform(0,1,self.W_in.shape))
+            self.W_in *= connection_in
 
             self.W_out = np.random.uniform(-1,1,(self.N,self.number_output))
-            #self.connexion_out = np.tile(1-self.x["position"][:,0],(self.number_output,1)).T < (np.random.uniform(0,self.sparsity,self.W_out.shape))
-            self.connexion_out = (1-self.x["position"][:,0]) < (np.random.uniform(0,self.sparsity,self.N))  #The neurons connected to the output are connected to all of the exit neurons. (Makes the training easier)
+            #self.connection_out = np.tile(1-self.x["position"][:,0],(self.number_output,1)).T < (np.random.uniform(0,self.sparsity,self.W_out.shape))
+            self.connection_out = (1-self.x["position"][:,0]) < (np.random.uniform(0,self.sparsity,self.N))  #The neurons connected to the output are connected to all of the exit neurons. (Makes the training easier)
             if self.number_output == 1:
-                self.W_out *= np.tile(self.connexion_out[np.newaxis].T,(self.number_output,1))
+                self.W_out *= np.tile(self.connection_out[np.newaxis].T,(self.number_output,1))
             else:
-                self.W_out *= np.tile(self.connexion_out,(self.number_output,1))
+                self.W_out *= np.tile(self.connection_out,(self.number_output,1))
 
             self.W_back = np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix, not used in the test cases.
             self.y = np.zeros((self.number_output))
@@ -181,7 +181,7 @@ class Spatial_ESN:
         print("---Beginning training---")
         X = np.zeros((len(inputs),self.N))
         for i in range(1,len(inputs)):
-            X[i] = self.x["activity"]*self.connexion_out    #So that the regression only sees the neurons connected to the output.
+            X[i] = self.x["activity"]*self.connection_out    #So that the regression only sees the neurons connected to the output.
             self.update(inputs[i],addNoise = True)
         newWeights = np.dot(np.dot(expected.T,X), np.linalg.inv(np.dot(X.T,X) + epsilon*np.eye(self.N)))
         self.W_out = newWeights
@@ -277,30 +277,33 @@ class Spatial_ESN:
         '''
         Displays the connections inside the reservoir, majoritarly to see what happens during spatialization. If i is given, it will simply display the connection from i to others neurons
         '''
-        connexion_in = (self.W_in != 0)
-        if len(self.connexion_out.shape) == 1:
-            connexion_out = self.connexion_out[np.newaxis].T
+        connection_in = (self.W_in != 0)
+        if len(self.connection_out.shape) == 1:
+            connection_out = self.connection_out[np.newaxis].T
         else:
-            connexion_out = self.connexion_out
+            connection_out = self.connection_out
         intern_connections = (self.W != 0)
         figure, axes = plt.subplots(nrows=1, ncols=3, figsize=(20,20))
 
-        print("Number of connection to the reservoir : ",np.sum(connexion_in))
+        print("Number of connection to the reservoir : ",np.sum(connection_in))
         print("Number of connection inside the reservoir : ",np.sum(intern_connections))
-        print("Number of connection to the output : ",np.sum(connexion_out))
+        print("Number of connection to the output : ",np.sum(connection_out))
 
         figure.suptitle("{} neurons, sparsity = {} ".format(self.N, self.sparsity))
-        axes[1].scatter(self.x["position"][:,0], self.x["position"][:,1], c = [1 if connexion_out[i,:].any() else 0 for i in range(self.N)])
-        axes[0].scatter(self.x["position"][:,0], self.x["position"][:,1], c = [1 if connexion_in[i,:].any() else 0 for i in range(self.N)])
+        axes[1].scatter(self.x["position"][:,0], self.x["position"][:,1], c = [1 if connection_out[i,:].any() else 0 for i in range(self.N)])
+        axes[0].scatter(self.x["position"][:,0], self.x["position"][:,1], c = [1 if connection_in[i,:].any() else 0 for i in range(self.N)])
         axes[0].set_title("Neurons connected to the input")
         axes[1].set_title("Neurons connected to the output")
 
-        colormap = np.array(['b','r', 'g','y'])            #Used for viewing connectivity upon click in the plot.
-        positionScatter = axes[2].scatter(self.x["position"][:,0], self.x["position"][:,1],c = colormap[0],cmap = colormap)
+        #colormap = np.array(['blue','red', 'green','yellow'])            #Used for viewing connectivity upon click in the plot.
+        unrelatedNeurons = axes[2].scatter(self.x["position"][:,0], self.x["position"][:,1],c = 'b')
+        previousNeurons =  axes[2].scatter([], [],c = 'r')
+        selectedNeuron =  axes[2].scatter([], [],c = 'g')
+        nextNeurons = axes[2].scatter([], [],c = 'y')
         axes[2].set_aspect(1)
         axes[1].set_aspect(1)
         axes[0].set_aspect(1)
-        if i == -1:          #The case where we display all the connections.
+        '''if i == -1:          #The case where we display all the connections.
             for i in range(self.N):
                 for j in range(self.N):
                     if self.W[i,j] != 0:
@@ -309,25 +312,28 @@ class Spatial_ESN:
         else:
             for j in range(self.N):
                 if self.W[j,i] != 0:
-                    l = axes[2].arrow(self.x["position"][i,0],self.x["position"][i,1],(self.x["position"][j,0] - self.x["position"][i,0]), (self.x["position"][j,1]- self.x["position"][i,1]),lw = 0.1,color = 'Red')
+                    l = axes[2].arrow(self.x["position"][i,0],self.x["position"][i,1],(self.x["position"][j,0] - self.x["position"][i,0]), (self.x["position"][j,1]- self.x["position"][i,1]),lw = 0.1,color = 'Red')'''
         axes[2].set_title("Intern connection "+("for a single neuron" if i !=-1 else "for all neurons"))
 
         def onclick(event):
             index = self.get_nearest_index(event.xdata,event.ydata)
             print("Clicked on neuron {}, with position {}".format(index,self.x["position"][index]))
-            newColors = []
+            previous = []
+            next = []
+            unrelated = []
             for j in range(self.N):
                 if j != index:
                     if self.W[j,index] != 0:
-                        newColors.append(colormap[1])
+                        next.append(j)
                     elif self.W[index,j] != 0:
-                        newColors.append(colormap[2])
+                        previous.append(j)
                     else:
-                        newColors.append(colormap[0])
-                else:
-                        newColors.append(colormap[3])
+                        unrelated.append(j)
 
-            positionScatter.set_array(np.array(newColors))             #Updates the colors.
+            unrelatedNeurons.set_offsets(self.x["position"][unrelated])
+            previousNeurons.set_offsets(self.x["position"][previous])
+            nextNeurons.set_offsets(self.x["position"][next])
+            selectedNeuron.set_offsets(self.x["position"][index])
             figure.canvas.draw()                                       #Updates visually
 
         figure.canvas.mpl_connect('button_press_event',onclick)
@@ -344,7 +350,7 @@ class Spatial_ESN:
         buffer.W = np.copy(self.W)
         buffer.W_in = np.copy(self.W_in)
         buffer.W_out = np.copy(self.W_out)
-        buffer.connexion_out = np.copy(self.connexion_out)
+        buffer.connection_out = np.copy(self.connection_out)
         buffer.W_back = np.copy(self.W_back)
         buffer.x = np.copy(self.x)
         buffer.y = np.copy(self.y)

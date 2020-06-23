@@ -19,7 +19,7 @@ Since it is easier to predict, it will be easier to see whether the network is c
 * :ballot_box_with_check: The spatialized ESN:
 This leads to the main part of the project: to give the neurons a position in the plan, before trying to use different properties and see how it learns.
 
-* :clock1: Properly use the spatialization.
+* :ballot_box_with_check: Properly use the spatialization.
 The plan is to try to check to what extent the properties of the ESN are kept, and how to adapt if there are differences.
 This is currently undergoing.
 
@@ -28,6 +28,18 @@ This is currently undergoing.
 * :ballot_box_with_check: Use json format to be able to redraw figures.
 
 * :clock1: Do some documentation, build bibliography : see related works.
+
+* :ballot_box_with_check: Update the display function, and check whether it is working properly.
+For ex, use of a constant input + short total length, just to see how the signal propagates.
+
+* :ballot_box_with_check: Delay the training:
+Allow the information to go through the reservoir before  
+
+* :clock1: Try to use Voronoi Tesselation for display purpose.  
+
+* :soon: Use neurons modelisation.
+  Try different probabilities of connection.
+
 
 ## How to use it:
   This program uses an object "Spatial_ESN". To use it effectively, there are several steps required. if you only want to use the plot with a different input series, you can simply:
@@ -50,9 +62,6 @@ Everything is almost done by the simulation method. But if you want to do someth
   Additionally, it has only been tested on 1 dimensional input/output (sinus and Mackey glass). Please note there may be errors on data of higher dimension (especially because of the way vectors are handled in numpy, and the use of np.newaxis).
 
 ## What is left todo:
-* :soon: Use neurons modelisation.
 I should introduce different types of neurons (having different connecting behaviours), and test different properties on the connectivity to see what's efficient.
-* :soon: Fully check the working of the spatialized ESN
-* :soon: Update the display function, and check whether it is working properly.
-For ex, use of a constant input + short total length, just to see how the signal propagates.
-* :soon: Try to use Voronoi Tesselation for display purpose.  
+
+* :soon: Build various figures once most of the above is implemented. The purpose is to find an effective learning mechanism, using the tools designed above.
