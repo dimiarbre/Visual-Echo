@@ -14,7 +14,7 @@ _data = {
     "seed"           : 1,
     "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
     "display_animation" : False,
-    "neuron_displayed" : -1,     #Should be: None if not wanted, else -1 for the whole connectivity, else the n° of the neuron.
+    "display_connectivity" : True,     # If the internal structure is displayed. Allows better understanding and checking.
     "savename" : "",             #The file where the animation is saved
     "number_neurons" : 10**2,
     "len_warmup" : 200,                #100,
@@ -77,7 +77,7 @@ class Spatial_ESN:
         self.sparsity = sparsity
         self.intern_sparsity = intern_sparsity
         self.spectral_radius = spectral_radius
-
+        self.historic = []
         self.reset_reservoir(completeReset = True)  #Sets the internal states and weight matrixes.
 
         #Values initialized later.
@@ -264,7 +264,7 @@ class Spatial_ESN:
 
         plt.close()
         self.isRecording = False
-        self.historic = []
+
 
     def record_state(self):
         '''
@@ -273,7 +273,7 @@ class Spatial_ESN:
         assert self.squared_size !=-1, "Non squared number of neurons: {}".format(self.N)
         self.historic.append(np.copy(self.x["activity"]))
 
-    def disp_connectivity(self, i = -1):
+    def disp_connectivity(self):
         '''
         Displays the connections inside the reservoir, majoritarly to see what happens during spatialization. If i is given, it will simply display the connection from i to others neurons
         '''
@@ -282,40 +282,47 @@ class Spatial_ESN:
             connection_out = self.connection_out[np.newaxis].T
         else:
             connection_out = self.connection_out
+
         intern_connections = (self.W != 0)
-        figure, axes = plt.subplots(nrows=1, ncols=3, figsize=(20,20))
+        figure, axes = plt.subplots(nrows=1, ncols=2, figsize=(20,20))
 
         print("Number of connection to the reservoir : ",np.sum(connection_in))
         print("Number of connection inside the reservoir : ",np.sum(intern_connections))
         print("Number of connection to the output : ",np.sum(connection_out))
 
         figure.suptitle("{} neurons, sparsity = {} ".format(self.N, self.sparsity))
-        axes[1].scatter(self.x["position"][:,0], self.x["position"][:,1], c = [1 if connection_out[i,:].any() else 0 for i in range(self.N)])
-        axes[0].scatter(self.x["position"][:,0], self.x["position"][:,1], c = [1 if connection_in[i,:].any() else 0 for i in range(self.N)])
-        axes[0].set_title("Neurons connected to the input")
-        axes[1].set_title("Neurons connected to the output")
 
-        #colormap = np.array(['blue','red', 'green','yellow'])            #Used for viewing connectivity upon click in the plot.
-        unrelatedNeurons = axes[2].scatter(self.x["position"][:,0], self.x["position"][:,1],c = 'b')
-        previousNeurons =  axes[2].scatter([], [],c = 'r')
-        selectedNeuron =  axes[2].scatter([], [],c = 'g')
-        nextNeurons = axes[2].scatter([], [],c = 'y')
-        axes[2].set_aspect(1)
-        axes[1].set_aspect(1)
+        #For the initial display, we show the connection to input and output -> the following lines compute them
+        connection_input = []
+        connection_output = []
+        connection_both = []
+        unrelated = []
+        for i in range(self.N):
+            connected_output = connection_out[i,:].any()
+            connected_input = connection_in[i,:].any()
+            if connected_input and connected_output:
+                connection_both.append(i)
+            elif connected_input:
+                connection_input.append(i)
+            elif connected_output:
+                connection_output.append(i)
+            else:
+                unrelated.append(i)
+
+        #Initialisation of the plots
+        unrelatedNeurons = axes[0].scatter(self.x["position"][unrelated][:,0],self.x["position"][unrelated][:,1],c = 'b')
+        previousNeurons =  axes[0].scatter(self.x["position"][connection_input][:,0],self.x["position"][connection_input][:,1],c = 'r')
+        selectedNeuron =  axes[0].scatter(self.x["position"][connection_both][:,0],self.x["position"][connection_both][:,1],c = 'g')
+        nextNeurons = axes[0].scatter(self.x["position"][connection_output][:,0],self.x["position"][connection_output][:,1],c = 'y')
+        axes[0].legend((previousNeurons,nextNeurons,selectedNeuron),("Connected to the input","Connected to the output","Connected to both"),fontsize=6)
+
         axes[0].set_aspect(1)
-        '''if i == -1:          #The case where we display all the connections.
-            for i in range(self.N):
-                for j in range(self.N):
-                    if self.W[i,j] != 0:
-                        l = axes[2].arrow(self.x["position"][i,0],self.x["position"][i,1],(self.x["position"][j,0] - self.x["position"][i,0]), (self.x["position"][j,1]- self.x["position"][i,1]),lw = 0.1)
-                        #axes[2].plot(self.x["position"][i,0],self.x["position"][i,1], self.x["position"][j,0], self.x["position"][j,1])
-        else:
-            for j in range(self.N):
-                if self.W[j,i] != 0:
-                    l = axes[2].arrow(self.x["position"][i,0],self.x["position"][i,1],(self.x["position"][j,0] - self.x["position"][i,0]), (self.x["position"][j,1]- self.x["position"][i,1]),lw = 0.1,color = 'Red')'''
-        axes[2].set_title("Intern connection "+("for a single neuron" if i !=-1 else "for all neurons"))
 
-        def onclick(event):
+
+        def onClick(event):
+            '''
+            When the mouse is clicked, change the focus on the nearest neuron, and display its past activity.
+            '''
             index = self.get_nearest_index(event.xdata,event.ydata)
             print("Clicked on neuron {}, with position {}".format(index,self.x["position"][index]))
             previous = []
@@ -329,14 +336,24 @@ class Spatial_ESN:
                         previous.append(j)
                     else:
                         unrelated.append(j)
-
             unrelatedNeurons.set_offsets(self.x["position"][unrelated])
             previousNeurons.set_offsets(self.x["position"][previous])
             nextNeurons.set_offsets(self.x["position"][next])
             selectedNeuron.set_offsets(self.x["position"][index])
+            axes[0].legend((selectedNeuron,previousNeurons,nextNeurons),("Selected Neuron","Previous Neurons","Next Neurons"),fontsize=6)
+
+            axes[1].clear()
+            axes[1].set_ylim(-1,1)
+            if self.historic != []:
+                axes[1].plot([state[index] for state in self.historic])
             figure.canvas.draw()                                       #Updates visually
 
-        figure.canvas.mpl_connect('button_press_event',onclick)
+        def onPress(event):
+            if event.key = " ":
+
+
+        figure.canvas.mpl_connect('button_press_event',onClick)
+        figure.canvas.mpl_connect('key_press_event',onPress)
         plt.show()
         plt.close()
 
@@ -369,7 +386,7 @@ class Spatial_ESN:
 
 #----------------------------------------------------------------------------------------------------------------------
 #Functions call.
-def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = [0],nb_iter = -1, display_anim = True, neuron_displayed = None,bin_size = 0.1, savename = ""):
+def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = [0],nb_iter = -1, display_anim = True,display_connectivity = True,bin_size = 0.1, savename = ""):
     '''
     Trains the network, and display both the expected result and the network output. Can also save/display the plot of the inner working.
     Inputs:
@@ -382,15 +399,15 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
         - displayAnim : Wether the internal state is plotted
         - savename: optionnal, where the .mp4 is generated. If not filled, it won't be generated.
     '''
+
     display = display_anim or (savename != "")
-    #esn.disp_connectivity()
-    if display:
+    if display or display_connectivity: #We need to record the states for both display methods.
         esn.begin_record()
     if nb_iter ==-1:
         nb_iter = len(input) - len_warmup - len_training
     print("Nb_iter: ",nb_iter)
 
-    simus = []
+    simus = []      #To handle several copies of a simulation. Used to compare the efficiency of delay.
     for i in range(len(delays)-1):
         expected = input[len_warmup - delays[i]:len_warmup - delays[i] + len_training] #The awaited results during the training. delays allow to offset the expected result, due to delay to cross the reservoir.
         copy = esn.copy()
@@ -400,8 +417,8 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
     simus.append(esn.simulation(nb_iter = nb_iter, inputs = input, expected = expected, len_warmup = len_warmup, len_training = len_training, reset = False))
     if display:
         esn.end_record(savename, bin_len = bin_size, isDisplayed = display_anim)
-    if neuron_displayed != None:
-        esn.disp_connectivity(i = neuron_displayed)
+    if display_connectivity:
+        esn.disp_connectivity()
 
     #Plot Handling. More complicated than necessary, but should be able to adapt to any number of delay input (still must be visible)
     nb_cols = 2 if len(delays) != 1 else 1
@@ -500,4 +517,4 @@ if __name__  == "__main__":
     print("Effective spectral radius :",max(abs(np.linalg.eig(test.W)[0]))) #Check wether the spectral radius is respected.
 
     compare_prediction(test,input = input,len_warmup = len_warmup, len_training = len_training, delays = delays, nb_iter = simulation_len,display_anim = display_animation,\
-        neuron_displayed = neuron_displayed ,bin_size = bin_size,savename = savename,label_input = label_input + " series")
+        display_connectivity = display_connectivity ,bin_size = bin_size,savename = savename,label_input = label_input + " series")
