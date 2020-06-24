@@ -11,20 +11,20 @@ from math import ceil
 
 # Default parameters
 _data = {
-    "seed"           : 1,
-    "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
+    "seed"           : 2,
+    "label_input" : "Sinus",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
     "display_animation" : False,
     "display_connectivity" : True,     # If the internal structure is displayed. Allows better understanding and checking.
     "savename" : "",             #The file where the animation is saved
     "number_neurons" : 10**2,
     "len_warmup" : 200,                #100,
     "len_training" : 1000,             #1000,
-    "simulation_len" : 2000,
-    "delays" : [0],
-    "sparsity" : 0.2,          #The probability of connection to the input/output (distance-based)
-    "intern_sparsity" : 0.05,   #The probability of connection inside of the reservoir, generally lower
+    "simulation_len" : 0,
+    "delays" : [0,1,2,3,4,5,6],
+    "sparsity" : 0.3,          #The probability of connection to the input/output (distance-based)
+    "intern_sparsity" : 0.2,   #The probability of connection inside of the reservoir.
     "spectral_radius" : 1.25,
-    "leak_rate" : 0.3,         #The greater it is, the more a neuron will lose its previous activity
+    "leak_rate" : 0.8,         #The greater it is, the more a neuron will lose its previous activity
     "epsilon" : 1e-8,
     "bin_size" : 0.05,
     "timestamp"      : "",
@@ -94,7 +94,7 @@ class Spatial_ESN:
         self.x = np.zeros((self.N),dtype = [("activity",float),("position",float,(2,)),("mean",float)])
         self.x["activity"] = np.random.uniform(-1,1,(self.N,))   #Internal state of the reservoir. Initialisation might change
 
-        self.x["mean"] = self.x["activity"]
+        self.x["mean"] = np.copy(self.x["activity"])
         self.x["position"][:,0] = np.random.uniform(0,1,(self.N))
         self.x["position"][:,1] = np.random.uniform(0,0.5,(self.N))
         self.istrained = False
@@ -107,7 +107,7 @@ class Spatial_ESN:
             deltax = (deltax.T - deltax)
 
         #    self.W *= np.random.uniform(-1,1,self.W.shape) < self.sparsity * (1- np.eye(self.N))
-            intern_connections = distances < np.random.uniform(0,self.sparsity,(distances.shape))
+            intern_connections = distances < np.random.uniform(0,self.intern_sparsity,(distances.shape))
             self.W *= intern_connections * (1-np.eye(self.N)) * (deltax > 0)   #Connects spatially
             eigenvalue = np.max(np.abs(np.linalg.eigvals(self.W)))
             '''
@@ -120,7 +120,7 @@ class Spatial_ESN:
             self.W_in = np.random.uniform(-1,1,(self.N, 1 + self.number_input))    #We initialise between -1 and 1 uniformly, maybe to change. The added input will be the bias
 
             #self.W_in = np.ones((self.N, 1 + self.number_input)) #To better visualize, but to delete !
-            connection_in = np.tile(self.x["position"][:,0],(self.number_input + 1,1)).T/(self.intern_sparsity) < (np.random.uniform(0,1,self.W_in.shape))
+            connection_in = np.tile(self.x["position"][:,0],(self.number_input + 1,1)).T/(self.sparsity) < (np.random.uniform(0,1,self.W_in.shape))
             self.W_in *= connection_in
 
             self.W_out = np.random.uniform(-1,1,(self.N,self.number_output))
@@ -318,6 +318,21 @@ class Spatial_ESN:
 
         axes[0].set_aspect(1)
 
+        #We draw the arrows
+        arrows = []
+        for i in range(self.N):
+            for j in range(self.N):
+                if self.W[i,j] != 0:
+                    arrow = axes[0].plot([self.x["position"][i,0],self.x["position"][j,0]], [self.x["position"][i,1], self.x["position"][j,1]],c = 'b',lw = 0.1)
+                    arrows.append(arrow)
+
+
+        #And we remove them, to be able to draw them again if necessary
+        arrowDisplayed = [False]
+        print("Set successfully")
+
+
+
 
         def onClick(event):
             '''
@@ -343,14 +358,33 @@ class Spatial_ESN:
             axes[0].legend((selectedNeuron,previousNeurons,nextNeurons),("Selected Neuron","Previous Neurons","Next Neurons"),fontsize=6)
 
             axes[1].clear()
+            axes[1].set_title("Past activity of neuron {}".format(index))
             axes[1].set_ylim(-1,1)
             if self.historic != []:
                 axes[1].plot([state[index] for state in self.historic])
             figure.canvas.draw()                                       #Updates visually
 
         def onPress(event):
-            if event.key = " ":
-
+            '''
+            Displays the connection arrows when the key space is pressed, and move them back when it is pressed again
+            '''
+            if event.key == " ":
+                if arrowDisplayed[0]:
+                    for arrow in arrows:
+                        arrow[0].set_visible(False)
+                else:
+                    for arrow in arrows:
+                        #print(arrows)
+                        arrow[0].set_visible(True)
+                arrowDisplayed[0] = not(arrowDisplayed[0])
+                figure.canvas.draw()
+            elif event.key == "escape":
+                unrelatedNeurons.set_offsets(self.x["position"][unrelated])
+                previousNeurons.set_offsets(self.x["position"][connection_input])
+                nextNeurons.set_offsets(self.x["position"][connection_output])
+                selectedNeuron.set_offsets(self.x["position"][connection_both])
+                axes[0].legend((previousNeurons,nextNeurons,selectedNeuron),("Connected to the input","Connected to the output","Connected to both"),fontsize=6)
+                figure.canvas.draw()
 
         figure.canvas.mpl_connect('button_press_event',onClick)
         figure.canvas.mpl_connect('key_press_event',onPress)
@@ -424,7 +458,7 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
     nb_cols = 2 if len(delays) != 1 else 1
     nb_lines = ceil(len(delays)/2) if len(delays) > 2 else 1
 
-    fig,axes = plt.subplots(nrows = nb_lines, ncols = nb_cols, sharex = True, sharey = True)
+    fig,axes = plt.subplots(nrows = nb_lines, ncols = nb_cols, sharex = True, sharey = False)
     if nb_cols == 1:
         axes = [[axes]]
     elif nb_lines == 1:
@@ -442,7 +476,7 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
 
     fig.suptitle("ESN with {} neurons\n sparsity toward external neurons {}\n internal sparsity {}".format(esn.N,esn.sparsity,esn.intern_sparsity))
     fig.tight_layout(pad=3.0)
-    #plt.legend()
+    plt.legend()
     plt.show()
 
 
