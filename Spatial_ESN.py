@@ -11,20 +11,21 @@ from math import ceil
 
 # Default parameters
 _data = {
-    "seed"           : 2,
-    "label_input" : "Sinus",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
+    "seed"           : 21,
+    "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
     "display_animation" : False,
     "display_connectivity" : True,     # If the internal structure is displayed. Allows better understanding and checking.
     "savename" : "",             #The file where the animation is saved
     "number_neurons" : 10**2,
     "len_warmup" : 200,                #100,
     "len_training" : 1000,             #1000,
-    "simulation_len" : 0,
-    "delays" : [0,1,2,3,4,5,6],
+    "simulation_len" : 500,
+    #"delays" : [i for i in range(100)],
+    "delays" : [0,1,2,3],
     "sparsity" : 0.3,          #The probability of connection to the input/output (distance-based)
     "intern_sparsity" : 0.2,   #The probability of connection inside of the reservoir.
     "spectral_radius" : 1.25,
-    "leak_rate" : 0.8,         #The greater it is, the more a neuron will lose its previous activity
+    "leak_rate" : 0.5,         #The greater it is, the more a neuron will lose its previous activity
     "epsilon" : 1e-8,
     "bin_size" : 0.05,
     "timestamp"      : "",
@@ -37,13 +38,40 @@ _data = {
 
 ##Basic functions, used in this particular ESN class.
 #Please note that since it is not a general application of ESN, they aren't modulable in this case
-#Znd changes has to be done by hand in the class / by changing those functions under the same name in the file.
+#A nd changes has to be done by hand in the class / by changing those functions under the same name in the file.
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 def tanh(x):
     return np.tanh(x)
 
+def blueSampling(desired_number,scaling = 10, xmin = 0, xmax = 1, ymin = 0, ymax = 0.5):
+    '''
+    Generates a blueSampling distribution in the plane for the neurons.
+    Based on https://blog.demofox.org/2017/10/20/generating-blue-noise-sample-points-with-mitchells-best-candidate-algorithm/
+    :parameters:
+        -desired_number : the number of point that must be placed
+        -scaling : the factor for the number of point generated at each step, 1 by default.
+        -xmin,xmax, ymin, ymax: the rectangle in which the points are set in.
+    :output:
+        A numpy array of dimension (desired_number,2) containing the points randomly generated
+    '''
+    points = np.zeros((desired_number,2))
+    points[0,0] = np.random.uniform(xmin,xmax,(1))
+    points[0,1] = np.random.uniform(ymin,ymax,(1))
+    for i in range(1,desired_number):
+        #Generation of the random points
+        candidates = np.zeros((scaling * i, 2))
+        candidates[:,0] = np.random.uniform(xmin,xmax,(scaling * i))
+        candidates[:,1] = np.random.uniform(ymin,ymax,(scaling * i))
+
+        #Selection of the furthest one:
+        distances = distance.cdist(candidates,points[:i]) #distances[i,j] : euclidian distance between candidates[i] and points[j]
+
+        #We consider the point whose minimal distance to the already set points is the greatest.
+        index_furthest = np.unravel_index(np.argmax(np.argmin(distances, axis =0) , axis=0), (desired_number))
+        points[i,:] = candidates[index_furthest]
+    return points
 #----------------------------------------------------------------------------------------------------------------------
 
 class Spatial_ESN:
@@ -51,7 +79,7 @@ class Spatial_ESN:
     Notes that this is a specific Echo State Network for training purpose, without the maximum features.
     It may ultimately be a basic one for spatialisation purpose.
     '''
-    def __init__(self,number_neurons, sparsity,intern_sparsity,number_input,number_output,spectral_radius,leak_rate,noise):
+    def __init__(self,number_neurons, sparsity,intern_sparsity,number_input,number_output,spectral_radius,leak_rate,noise,isCopy = False):
         '''
         Creates an instance of spatial ESN given some parameters
         :parameters:
@@ -61,8 +89,11 @@ class Spatial_ESN:
             - number_output : How many output neurons.
             - spectral_radius : the desired spectral radius, depending on how lastong we want the memory to be.
             - leak_rate: The leak_rate on every update, symbolize the amount of information kept/lost.
+            - isCopy: Boolean, False by default, defines wether we creating a copy or not. Shouldn't be used, except for method copy of Spatial_ESN.
 
         '''
+        if not isCopy:
+            print("---Creation of the Network---")
         self.number_input = number_input
         self.number_output = number_output
         self.N = number_neurons  #How many neurons in our reservoir
@@ -78,11 +109,13 @@ class Spatial_ESN:
         self.intern_sparsity = intern_sparsity
         self.spectral_radius = spectral_radius
         self.historic = []
-        self.reset_reservoir(completeReset = True)  #Sets the internal states and weight matrixes.
+        self.reset_reservoir(completeReset = not(isCopy))  #Sets the internal states and weight matrixes.
 
         #Values initialized later.
         self.len_warmup = -1
         self.len_training = -1
+        if not isCopy:
+            print("---Network Created---\n")
 
     def reset_reservoir(self,completeReset = False):
         '''
@@ -95,12 +128,18 @@ class Spatial_ESN:
         self.x["activity"] = np.random.uniform(-1,1,(self.N,))   #Internal state of the reservoir. Initialisation might change
 
         self.x["mean"] = np.copy(self.x["activity"])
-        self.x["position"][:,0] = np.random.uniform(0,1,(self.N))
-        self.x["position"][:,1] = np.random.uniform(0,0.5,(self.N))
+
         self.istrained = False
         if completeReset:       #Initialization of the weights matrixes.
+
             self.n_iter = 0
 
+            #The position of the neurons:
+            #self.x["position"][:,0] = np.random.uniform(0,1,(self.N))
+            #self.x["position"][:,1] = np.random.uniform(0,0.5,(self.N))
+            print("---Beginning Blue Noise Sampling---")
+            self.x["position"] = blueSampling(self.N)
+            print("---Done---")
             self.W = np.random.uniform(-1,1,(self.N,self.N))  #The internal weight matrix
             distances = distance.cdist(self.x["position"],self.x["position"]) #Computes the distances between each nodes, used for the probability of connection.
             deltax = np.tile(self.x["position"][:,0],(self.N,1))
@@ -109,13 +148,7 @@ class Spatial_ESN:
         #    self.W *= np.random.uniform(-1,1,self.W.shape) < self.sparsity * (1- np.eye(self.N))
             intern_connections = distances < np.random.uniform(0,self.intern_sparsity,(distances.shape))
             self.W *= intern_connections * (1-np.eye(self.N)) * (deltax > 0)   #Connects spatially
-            eigenvalue = np.max(np.abs(np.linalg.eigvals(self.W)))
-            '''
-            if eigenvalue == 0.0:
-                print(self.W)
-                raise Exception("Null Maximum Eigenvalue")
-            '''
-            #self.W *= self.spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
+
 
             self.W_in = np.random.uniform(-1,1,(self.N, 1 + self.number_input))    #We initialise between -1 and 1 uniformly, maybe to change. The added input will be the bias
 
@@ -131,6 +164,21 @@ class Spatial_ESN:
             else:
                 self.W_out *= np.tile(self.connection_out,(self.number_output,1))
 
+
+            #Spectral radius control:
+            print(self.W_out.shape,self.W_in[:,1:].shape)
+            pseudo_W = self.W @ self.W_out @ self.W_in[:,1:].T
+            print(np.min(pseudo_W),np.max(pseudo_W))
+            eigenvalue = np.max(np.abs(np.linalg.eigvals(pseudo_W)))
+            '''
+            if eigenvalue == 0.0:
+                print(pseudo_W)
+                raise Exception("Null Maximum Eigenvalue")
+            else:
+                self.W *= self.spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
+            '''
+            self.W *=self.spectral_radius
+
             self.W_back = np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix, not used in the test cases.
             self.y = np.zeros((self.number_output))
 
@@ -142,7 +190,7 @@ class Spatial_ESN:
             input = np.zeros((self.number_input))
         else:
             input = np.array(input)
-        u = 1.0 , input
+        u = 1.0 , input             #We add the bias.
         matrixA = np.dot(self.W_in, u)
         matrixB = np.dot(self.W , self.x["activity"])
         matrixC = 0 #self.W_back @ self.y #Feature deactivated and not tested in this particular case.
@@ -181,13 +229,13 @@ class Spatial_ESN:
         print("---Beginning training---")
         X = np.zeros((len(inputs),self.N))
         for i in range(1,len(inputs)):
-            X[i] = self.x["activity"]*self.connection_out    #So that the regression only sees the neurons connected to the output.
+            X[i] = self.x["activity"] * self.connection_out    #So that the regression only sees the neurons connected to the output.
             self.update(inputs[i],addNoise = True)
-        newWeights = np.dot(np.dot(expected.T,X), np.linalg.inv(np.dot(X.T,X) + epsilon*np.eye(self.N)))
+        newWeights = np.dot(np.dot(expected.T,X), np.linalg.inv(np.dot(X.T,X) + epsilon*np.eye(self.N)))    #The linear regression
         self.W_out = newWeights
         print("---Training done---")
         self.istrained = True
-        self.y = expected[-1]   #Output state of the reservoir. After this, it will be computed from the state of the
+        self.y = self.W_out @ self.x["activity"]   #Output state of the reservoir. After this, it will be computed from the state of the reservoir in the update function.
 
     def generateNoise(self):
         return np.random.uniform(-self.noise,self.noise,(self.number_output)) #A random vector beetween -noise and noise
@@ -277,6 +325,7 @@ class Spatial_ESN:
         '''
         Displays the connections inside the reservoir, majoritarly to see what happens during spatialization. If i is given, it will simply display the connection from i to others neurons
         '''
+
         connection_in = (self.W_in != 0)
         if len(self.connection_out.shape) == 1:
             connection_out = self.connection_out[np.newaxis].T
@@ -284,7 +333,7 @@ class Spatial_ESN:
             connection_out = self.connection_out
 
         intern_connections = (self.W != 0)
-        figure, axes = plt.subplots(nrows=1, ncols=2, figsize=(20,20))
+        figure, axes = plt.subplots(nrows=2, ncols=1, figsize=(20,20))
 
         print("Number of connection to the reservoir : ",np.sum(connection_in))
         print("Number of connection inside the reservoir : ",np.sum(intern_connections))
@@ -292,6 +341,7 @@ class Spatial_ESN:
 
         figure.suptitle("{} neurons, sparsity = {} ".format(self.N, self.sparsity))
 
+        print("---Placing the neurons, this migth take a while---")
         #For the initial display, we show the connection to input and output -> the following lines compute them
         connection_input = []
         connection_output = []
@@ -328,12 +378,8 @@ class Spatial_ESN:
 
 
         #And we remove them, to be able to draw them again if necessary
-        arrowDisplayed = [False]
-        print("Set successfully")
-
-
-
-
+        arrowDisplayed = [True]
+        print("---Done---")
         def onClick(event):
             '''
             When the mouse is clicked, change the focus on the nearest neuron, and display its past activity.
@@ -359,7 +405,13 @@ class Spatial_ESN:
 
             axes[1].clear()
             axes[1].set_title("Past activity of neuron {}".format(index))
+            axes[1].plot([self.len_warmup,self.len_warmup],[-1,1],'--')
+            axes[1].plot([self.len_training+self.len_warmup,self.len_training+self.len_warmup],[-1,1],'--')
+            axes[1].fill_between([0,self.len_warmup],[-1,-1],[1,1], color = 'green', alpha = 0.25, label = "Warmup phase" )
+            axes[1].fill_between([self.len_warmup,self.len_warmup + self.len_training],[-1,-1],[1,1], color = 'Blue', alpha = 0.25, label = "Training phase" )
+            axes[1].fill_between([self.len_warmup + self.len_training,self.n_iter + 1],[-1,-1],[1,1], color = 'Red', alpha = 0.25, label = "Simulation phase" )
             axes[1].set_ylim(-1,1)
+            axes[1].legend()
             if self.historic != []:
                 axes[1].plot([state[index] for state in self.historic])
             figure.canvas.draw()                                       #Updates visually
@@ -388,16 +440,19 @@ class Spatial_ESN:
 
         figure.canvas.mpl_connect('button_press_event',onClick)
         figure.canvas.mpl_connect('key_press_event',onPress)
+        print("---Displaying---")
         plt.show()
+        print("---Done---")
         plt.close()
 
     def copy(self):
         '''
         Returns an independent copy of the current ESN. Used to compare different ESN with same initialization.
         '''
+        print("---Beginning copying---")
         buffer = Spatial_ESN(number_neurons = self.N, sparsity = self.sparsity,intern_sparsity = self.intern_sparsity, \
             number_input = self.number_input,number_output = self.number_output,\
-            spectral_radius = self.spectral_radius,leak_rate = self.leak_rate,noise = self.noise)
+            spectral_radius = self.spectral_radius,leak_rate = self.leak_rate,noise = self.noise,isCopy = True)
         buffer.W = np.copy(self.W)
         buffer.W_in = np.copy(self.W_in)
         buffer.W_out = np.copy(self.W_out)
@@ -406,24 +461,34 @@ class Spatial_ESN:
         buffer.x = np.copy(self.x)
         buffer.y = np.copy(self.y)
         buffer.n_iter = self.n_iter
+        print("---Copying done---")
         return buffer
 
     def get_nearest_index(self,x,y):
         '''
         Given a position in the plane, returns the index of the nearest neuron
-        Input: two floats.
+        :parameters: x,y : two floats.
         Output: returns a tuple
         '''
+
         distances = distance.cdist(self.x["position"],[[x,y]])
         ind = np.unravel_index(np.argmin(distances, axis=None), distances.shape) #Gets the index of the minimum of the distances array
-        return(ind[0])
+        return (ind[0])
 
 #----------------------------------------------------------------------------------------------------------------------
-#Functions call.
+#Treatment functions. Used for display and to obtain results
+def compute_error(result,expected):
+    "Computes a least squared error between two arrays."
+    gap = 0
+    for i in range(len(result)):
+        gap += np.linalg.norm(result[i]-expected[i])/np.sqrt(i+1)
+    return gap
+
+
 def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = [0],nb_iter = -1, display_anim = True,display_connectivity = True,bin_size = 0.1, savename = ""):
     '''
     Trains the network, and display both the expected result and the network output. Can also save/display the plot of the inner working.
-    Inputs:
+    :parameters:
         - esn : an instance of Spatial_ESN
         - input : the input series
         - label_input : the name for the plot
@@ -447,6 +512,7 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
         copy = esn.copy()
         simus.append(copy.simulation(nb_iter = nb_iter, inputs = input, expected = expected, len_warmup = len_warmup, len_training = len_training, reset = False ))
 
+
     expected = input[len_warmup - delays[-1]:len_warmup - delays[-1] + len_training] #The awaited results during the training.
     simus.append(esn.simulation(nb_iter = nb_iter, inputs = input, expected = expected, len_warmup = len_warmup, len_training = len_training, reset = False))
     if display:
@@ -454,29 +520,39 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
     if display_connectivity:
         esn.disp_connectivity()
 
-    #Plot Handling. More complicated than necessary, but should be able to adapt to any number of delay input (still must be visible)
-    nb_cols = 2 if len(delays) != 1 else 1
-    nb_lines = ceil(len(delays)/2) if len(delays) > 2 else 1
+    #Multiple sublots handling. More complicated than necessary, but should be able to adapt to any number of delay input (still must be visible)
+    nb_cols = 2 if len(delays) >2 else 1
+    nb_lines = ceil(len(delays)/2) if len(delays) > 2 else len(delays)
 
     fig,axes = plt.subplots(nrows = nb_lines, ncols = nb_cols, sharex = True, sharey = False)
-    if nb_cols == 1:
+    if nb_lines == 1:
         axes = [[axes]]
-    elif nb_lines == 1:
-        axes = [axes]
+    elif nb_cols == 1:
+        axes = list(map(lambda x : [x],axes))
+
+    min_error = np.inf
+    optimal_delay = -1
     i,j = 0,0
     while nb_cols*(i) + j+1 <= len(delays):
         axes[i][j].plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), input[len_warmup + len_training - delays[nb_cols*i + j] : nb_iter + len_warmup + len_training - delays[nb_cols*i + j]],label = label_input)
         axes[i][j].plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), simus[nb_cols*i + j],'--', label = "ESN response")
         axes[i][j].set_title("Delay: {} steps".format(delays[nb_cols*i + j]))
+
+        error = compute_error(simus[nb_cols*i + j],input[len_warmup + len_training - delays[nb_cols*i + j] : nb_iter + len_warmup + len_training - delays[nb_cols*i + j]])
+        if error < min_error:
+            min_error = error
+            optimal_delay = delays[nb_cols*i + j]
+        print("Training delay: {} ---- Error : {}".format(delays[nb_cols*i + j],error))
         if j == nb_cols - 1:
             j=0
             i+=1
         else:
             j+=1
-
+        #axes[i][j].legend()
     fig.suptitle("ESN with {} neurons\n sparsity toward external neurons {}\n internal sparsity {}".format(esn.N,esn.sparsity,esn.intern_sparsity))
-    fig.tight_layout(pad=3.0)
-    plt.legend()
+    #fig.tight_layout(pad=3.0)
+    #plt.legend()
+    print("The optimal delay for those parameters is {},with an error of {}".format(optimal_delay,min_error))
     plt.show()
 
 
