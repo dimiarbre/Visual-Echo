@@ -7,25 +7,26 @@ from scipy.spatial import Voronoi
 import json
 import time
 import subprocess
-from math import ceil
+from math import ceil,floor
+import Bridson_sampling
 
 # Default parameters
 _data = {
-    "seed"           : 21,
+    "seed"           : 18,
     "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
-    "display_animation" : False,
+    "display_animation" : True,
     "display_connectivity" : True,     # If the internal structure is displayed. Allows better understanding and checking.
     "savename" : "",             #The file where the animation is saved
     "number_neurons" : 10**2,
     "len_warmup" : 200,                #100,
     "len_training" : 1000,             #1000,
     "simulation_len" : 500,
-    #"delays" : [i for i in range(100)],
+    "delays" : [i for i in range(100)],
     "delays" : [0,1,2,3],
     "sparsity" : 0.3,          #The probability of connection to the input/output (distance-based)
-    "intern_sparsity" : 0.2,   #The probability of connection inside of the reservoir.
+    "intern_sparsity" : 0.15,   #The probability of connection inside of the reservoir.
     "spectral_radius" : 1.25,
-    "leak_rate" : 0.5,         #The greater it is, the more a neuron will lose its previous activity
+    "leak_rate" : 0.6,         #The greater it is, the more a neuron will lose its previous activity
     "epsilon" : 1e-8,
     "bin_size" : 0.05,
     "timestamp"      : "",
@@ -38,28 +39,28 @@ _data = {
 
 ##Basic functions, used in this particular ESN class.
 #Please note that since it is not a general application of ESN, they aren't modulable in this case
-#A nd changes has to be done by hand in the class / by changing those functions under the same name in the file.
+#And changes has to be done by hand in the class / by changing those functions under the same name in the file.
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 def tanh(x):
     return np.tanh(x)
 
-def blueSampling(desired_number,scaling = 10, xmin = 0, xmax = 1, ymin = 0, ymax = 0.5):
+def blueSampling(number_points,scaling = 10, xmin = 0, xmax = 1, ymin = 0, ymax = 0.5):
     '''
     Generates a blueSampling distribution in the plane for the neurons.
     Based on https://blog.demofox.org/2017/10/20/generating-blue-noise-sample-points-with-mitchells-best-candidate-algorithm/
     :parameters:
-        -desired_number : the number of point that must be placed
+        -number_points : the number of point that must be placed
         -scaling : the factor for the number of point generated at each step, 1 by default.
         -xmin,xmax, ymin, ymax: the rectangle in which the points are set in.
     :output:
-        A numpy array of dimension (desired_number,2) containing the points randomly generated
+        A numpy array of dimension (number_points,2) containing the points randomly generated
     '''
-    points = np.zeros((desired_number,2))
+    points = np.zeros((number_points,2))
     points[0,0] = np.random.uniform(xmin,xmax,(1))
     points[0,1] = np.random.uniform(ymin,ymax,(1))
-    for i in range(1,desired_number):
+    for i in range(1,number_points):
         #Generation of the random points
         candidates = np.zeros((scaling * i, 2))
         candidates[:,0] = np.random.uniform(xmin,xmax,(scaling * i))
@@ -69,9 +70,58 @@ def blueSampling(desired_number,scaling = 10, xmin = 0, xmax = 1, ymin = 0, ymax
         distances = distance.cdist(candidates,points[:i]) #distances[i,j] : euclidian distance between candidates[i] and points[j]
 
         #We consider the point whose minimal distance to the already set points is the greatest.
-        index_furthest = np.unravel_index(np.argmax(np.argmin(distances, axis =0) , axis=0), (desired_number))
+        index_furthest = np.unravel_index(np.argmax(np.argmin(distances, axis =0) , axis=0), (number_points))
         points[i,:] = candidates[index_furthest]
     return points
+
+def generation_Bridson(number_points, k = 30, xmax = 1, ymax = 0.5):
+    '''
+    Generates a random sampling of point with blue noise properties.
+    Uses the method described in Fast Poisson Disk Sampling in Arbitrary Dimensions, Robert Bridson
+    Implementation by Nicolas Rougier, see Bridson_sampling.py file for credits.
+    In this case, we have n = 2
+    :parameters:
+        -number_points: the number of points generated. Analog to N in the paper
+        -min_dist: Minimum distance between two points. Analog to r
+        -k: limit of samples to choose.
+        -xmax, ymax: the rectangle in which the points are set in.
+    :output:
+        A numpy array of dimension (number_points,2) containing the points randomly generated
+    '''
+    optimal_radius = np.sqrt(np.sqrt(3) *xmax * ymax/ (6 * number_points))
+    return Bridson_sampling.Bridson_sampling(width = xmax, height = ymax, radius = optimal_radius, k = k)
+
+
+
+
+    '''cell_size = min_dist / np.sqrt(2)
+    grid = -np.ones((floor((xmax-xmin) / cell_size),floor((ymax-ymin) / cell_size)))    #Equivalent of step 0
+    points = np.zeros((number_points,2))
+
+    def insert_background(index,x,y):
+        index_x = floor((x-xmin) / cell_size)
+        index_y = floor((y-ymin) / cell_size)
+        grid[index_x,index_y] = index
+
+    #Generation of x0
+    points[0,0] = np.random.uniform(xmin,xmax,(1))
+    points[0,1] = np.random.uniform(ymin,ymax,(1))
+
+    active_list = [0]
+    list_len = 1
+    next_index = 1
+    R1 = min_dist
+    R2 = 2 * min_dist
+    while active_list != [] and next_index <= number_points :
+        alea = np.random.randint(0,list_len)
+        random_index = active_list[alea]
+        random_theta = 360 * np.random.uniform(0,1,(k))
+        random_distance = np.sqrt(np.random.uniform())
+        newpoints = "lol"
+
+
+    return points'''
+
 #----------------------------------------------------------------------------------------------------------------------
 
 class Spatial_ESN:
@@ -123,6 +173,13 @@ class Spatial_ESN:
         :parameters:
             -completeReset,optional: Boolean, False by default, True will reset all the weights, used for (re)initialization. Network will need to be trained again in this case.
         '''
+        if completeReset:
+            print("---Beginning Blue Noise Sampling---")
+            newpoints =  generation_Bridson(self.N)#blueSampling(self.N)
+            print("---Done---")
+
+            #We will have a number of neurons sligthly different from the expexted one, since the Bridson generation does not provide a fixed number of points.
+            self.N = newpoints.shape[0]
 
         self.x = np.zeros((self.N),dtype = [("activity",float),("position",float,(2,)),("mean",float)])
         self.x["activity"] = np.random.uniform(-1,1,(self.N,))   #Internal state of the reservoir. Initialisation might change
@@ -137,9 +194,8 @@ class Spatial_ESN:
             #The position of the neurons:
             #self.x["position"][:,0] = np.random.uniform(0,1,(self.N))
             #self.x["position"][:,1] = np.random.uniform(0,0.5,(self.N))
-            print("---Beginning Blue Noise Sampling---")
-            self.x["position"] = blueSampling(self.N)
-            print("---Done---")
+            self.x["position"] = newpoints
+
             self.W = np.random.uniform(-1,1,(self.N,self.N))  #The internal weight matrix
             distances = distance.cdist(self.x["position"],self.x["position"]) #Computes the distances between each nodes, used for the probability of connection.
             deltax = np.tile(self.x["position"][:,0],(self.N,1))
@@ -167,17 +223,16 @@ class Spatial_ESN:
 
             #Spectral radius control:
             print(self.W_out.shape,self.W_in[:,1:].shape)
-            pseudo_W = self.W @ self.W_out @ self.W_in[:,1:].T
+            pseudo_W = self.W + (self.W_out @ self.W_in[:,1:].T).T
             print(np.min(pseudo_W),np.max(pseudo_W))
             eigenvalue = np.max(np.abs(np.linalg.eigvals(pseudo_W)))
-            '''
+
             if eigenvalue == 0.0:
-                print(pseudo_W)
                 raise Exception("Null Maximum Eigenvalue")
             else:
                 self.W *= self.spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
-            '''
-            self.W *=self.spectral_radius
+
+            #self.W *=self.spectral_radius
 
             self.W_back = np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix, not used in the test cases.
             self.y = np.zeros((self.number_output))
@@ -277,17 +332,22 @@ class Spatial_ESN:
         figure, axes = plt.subplots(nrows = 2,ncols = 1,sharex = True, frameon=False)
         title = figure.suptitle("Warmup: Step n°0")
 
+
+        bins = np.arange(0, 1 + bin_len, bin_len)
+        bin_position = np.array([(self.x["position"][:,0] >= bins[i]) * (self.x["position"][:,0] < bins[i+1]) for i in range(len(bins)-1)])
         #Initialisation of the scatterplot
         scat = axes[0].scatter(x = self.x["position"][:,0],y = self.x["position"][:,1], c = self.x["activity"], vmin = -1 , vmax = 1)
         scat.set_sizes(10 * np.ones(self.N))
         axes[0].set_title("Neurons position and activity")
         #plt.colorbar(scat)
 
-        bins = np.arange(0, 1 + bin_len, bin_len)
-        bin_position = np.array([(self.x["position"][:,0] >= bins[i]) * (self.x["position"][:,0] < bins[i+1]) for i in range(len(bins)-1)])
+        for x_value in bins[1:]:
+            axes[0].plot([x_value,x_value],[0,0.5],'--',c = 'b')
+
+
         value = [np.mean(self.historic[0]*(self.x["position"][:,0] >= bins[i]) * (self.x["position"][:,0] < bins[i+1])) for i in range(len(bins)-1)]
         bar = axes[1].bar(bins[:-1] + bin_len / 2 ,value,width = bin_len)
-        axes[1].set_title("Mean value of activity according to x position")
+        axes[1].set_title("Global value according to x position")
 
         def update_frame(i):
             #Update of the neurons display
@@ -296,8 +356,8 @@ class Spatial_ESN:
 
             #Update of the histogram
 
-            value = [np.mean(self.historic[i]*(self.x["position"][:,0] >= bins[j]) * (self.x["position"][:,0] < bins[j+1])) for j in range(len(bins)-1)]
-            #We take the mean inside the bin interval
+            value = [np.mean(self.historic[i]* bin_position[j]) for j in range(len(bins)-1)]
+                #We take the mean inside the bin interval
             for rect,h in zip(bar,value):
                 rect.set_height(h)
             return scat,bar
