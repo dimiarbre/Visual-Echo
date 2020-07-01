@@ -1,9 +1,11 @@
 import numpy as np
 import random
+import matplotlib as mpl
+import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import scipy.spatial.distance as distance
-from scipy.spatial import Voronoi
+from scipy.spatial import Voronoi,voronoi_plot_2d
 import json
 import time
 import subprocess
@@ -12,21 +14,21 @@ import Bridson_sampling
 
 # Default parameters
 _data = {
-    "seed"           : 18,
-    "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
+    "seed"           : 21,
+    "label_input" : "Sinus",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
     "display_animation" : True,
-    "display_connectivity" : True,     # If the internal structure is displayed. Allows better understanding and checking.
+    "display_connectivity" : False,     # If the internal structure is displayed. Allows better understanding and checking.
     "savename" : "",             #The file where the animation is saved
     "number_neurons" : 10**2,
     "len_warmup" : 200,                #100,
     "len_training" : 1000,             #1000,
     "simulation_len" : 500,
     "delays" : [i for i in range(100)],
-    "delays" : [0,1,2,3],
+    "delays" : [0],
     "sparsity" : 0.3,          #The probability of connection to the input/output (distance-based)
     "intern_sparsity" : 0.15,   #The probability of connection inside of the reservoir.
-    "spectral_radius" : 1.25,
-    "leak_rate" : 0.6,         #The greater it is, the more a neuron will lose its previous activity
+    "spectral_radius" : 0.8,
+    "leak_rate" : 0.7,         #The greater it is, the more a neuron will lose its previous activity
     "epsilon" : 1e-8,
     "bin_size" : 0.05,
     "timestamp"      : "",
@@ -79,9 +81,9 @@ def generation_Bridson(number_points, k = 30, xmax = 1, ymax = 0.5):
     Generates a random sampling of point with blue noise properties.
     Uses the method described in Fast Poisson Disk Sampling in Arbitrary Dimensions, Robert Bridson
     Implementation by Nicolas Rougier, see Bridson_sampling.py file for credits.
-    In this case, we have n = 2
+
     :parameters:
-        -number_points: the number of points generated. Analog to N in the paper
+        -number_points: the number of points we want generated. There will be an approximation of this number generated
         -min_dist: Minimum distance between two points. Analog to r
         -k: limit of samples to choose.
         -xmax, ymax: the rectangle in which the points are set in.
@@ -91,36 +93,6 @@ def generation_Bridson(number_points, k = 30, xmax = 1, ymax = 0.5):
     optimal_radius = np.sqrt(np.sqrt(3) *xmax * ymax/ (6 * number_points))
     return Bridson_sampling.Bridson_sampling(width = xmax, height = ymax, radius = optimal_radius, k = k)
 
-
-
-
-    '''cell_size = min_dist / np.sqrt(2)
-    grid = -np.ones((floor((xmax-xmin) / cell_size),floor((ymax-ymin) / cell_size)))    #Equivalent of step 0
-    points = np.zeros((number_points,2))
-
-    def insert_background(index,x,y):
-        index_x = floor((x-xmin) / cell_size)
-        index_y = floor((y-ymin) / cell_size)
-        grid[index_x,index_y] = index
-
-    #Generation of x0
-    points[0,0] = np.random.uniform(xmin,xmax,(1))
-    points[0,1] = np.random.uniform(ymin,ymax,(1))
-
-    active_list = [0]
-    list_len = 1
-    next_index = 1
-    R1 = min_dist
-    R2 = 2 * min_dist
-    while active_list != [] and next_index <= number_points :
-        alea = np.random.randint(0,list_len)
-        random_index = active_list[alea]
-        random_theta = 360 * np.random.uniform(0,1,(k))
-        random_distance = np.sqrt(np.random.uniform())
-        newpoints = "lol"
-
-
-    return points'''
 
 #----------------------------------------------------------------------------------------------------------------------
 
@@ -159,6 +131,9 @@ class Spatial_ESN:
         self.intern_sparsity = intern_sparsity
         self.spectral_radius = spectral_radius
         self.historic = []
+
+        self.ymax = 0.5
+
         self.reset_reservoir(completeReset = not(isCopy))  #Sets the internal states and weight matrixes.
 
         #Values initialized later.
@@ -175,7 +150,7 @@ class Spatial_ESN:
         '''
         if completeReset:
             print("---Beginning Blue Noise Sampling---")
-            newpoints =  generation_Bridson(self.N)#blueSampling(self.N)
+            newpoints =  generation_Bridson(self.N,ymax = self.ymax)      #blueSampling(self.N)
             print("---Done---")
 
             #We will have a number of neurons sligthly different from the expexted one, since the Bridson generation does not provide a fixed number of points.
@@ -222,17 +197,16 @@ class Spatial_ESN:
 
 
             #Spectral radius control:
-            print(self.W_out.shape,self.W_in[:,1:].shape)
-            pseudo_W = self.W + (self.W_out @ self.W_in[:,1:].T).T
-            print(np.min(pseudo_W),np.max(pseudo_W))
-            eigenvalue = np.max(np.abs(np.linalg.eigvals(pseudo_W)))
+            #A matrix taking into account the feedback from the output to the input, trying to imitate the echo state property.
+            pseudo_W = self.W + (self.W_out @ self.W_in[:,1:].T).T     #This allows to have a non triangular matrix, giving a spectral radius different from 0.
+            current_radius = np.max(np.abs(np.linalg.eigvals(pseudo_W)))
 
-            if eigenvalue == 0.0:
-                raise Exception("Null Maximum Eigenvalue")
+            if current_radius == 0.0:
+                raise Exception("Null Spectral radius for generated matrix")
             else:
-                self.W *= self.spectral_radius/eigenvalue            #We normalize the weight matrix to get the desired spectral radius.
-
-            #self.W *=self.spectral_radius
+                #self.W *= self.spectral_radius/current_radius            #We normalize the weight matrix to get the desired spectral radius.
+                pass
+            self.W *= self.spectral_radius
 
             self.W_back = np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix, not used in the test cases.
             self.y = np.zeros((self.number_output))
@@ -328,7 +302,7 @@ class Spatial_ESN:
         self.historic = []
         self.record_state()
 
-    def end_record(self,name,bin_len = 0.1,isDisplayed = False):
+    def end_record(self,name, bin_len = 0.1, isDisplayed = False):
         figure, axes = plt.subplots(nrows = 2,ncols = 1,sharex = True, frameon=False)
         title = figure.suptitle("Warmup: Step n°0")
 
@@ -336,31 +310,51 @@ class Spatial_ESN:
         bins = np.arange(0, 1 + bin_len, bin_len)
         bin_position = np.array([(self.x["position"][:,0] >= bins[i]) * (self.x["position"][:,0] < bins[i+1]) for i in range(len(bins)-1)])
         #Initialisation of the scatterplot
-        scat = axes[0].scatter(x = self.x["position"][:,0],y = self.x["position"][:,1], c = self.x["activity"], vmin = -1 , vmax = 1)
-        scat.set_sizes(10 * np.ones(self.N))
+        #scat = axes[0].scatter(x = self.x["position"][:,0],y = self.x["position"][:,1], c = self.x["activity"], vmin = -1 , vmax = 1)
+        #scat.set_sizes(10 * np.ones(self.N))
+
+
         axes[0].set_title("Neurons position and activity")
         #plt.colorbar(scat)
 
+        #Draws the vertical liines.
         for x_value in bins[1:]:
             axes[0].plot([x_value,x_value],[0,0.5],'--',c = 'b')
 
-
+        #Histogram setup
         value = [np.mean(self.historic[0]*(self.x["position"][:,0] >= bins[i]) * (self.x["position"][:,0] < bins[i+1])) for i in range(len(bins)-1)]
         bar = axes[1].bar(bins[:-1] + bin_len / 2 ,value,width = bin_len)
         axes[1].set_title("Global value according to x position")
 
+        #We add 4 dummy points for display (see https://stackoverflow.com/questions/20515554/colorize-voronoi-diagram)
+        vor = Voronoi(np.concatenate((self.x["position"],np.array([[999,999],[-999,999],[999,-999],[-999,-999]]))))
+        voronoi_plot_2d(vor,axes[0],show_points=True, show_vertices=False, s=1)
+        norm = mpl.colors.Normalize(vmin = -1, vmax = 1, clip=True)
+        mapper = cm.ScalarMappable(norm = norm, cmap = cm.Blues_r)  #The Voronoi colormap
+
+        list_fill = []
+
+        for neuron_index in range(self.N):
+            region = vor.regions[vor.point_region[neuron_index]]
+            polygon = [vor.vertices[i] for i in region]
+            axes[0].fill(*zip(*polygon), color=mapper.to_rgba(2*neuron_index-1))
+
+        axes[0].set_ylim(0,self.ymax)
+        axes[0].set_xlim(0,1)
+
         def update_frame(i):
+
             #Update of the neurons display
-            scat.set_array(self.historic[i])
+            #scat.set_array(self.historic[i])
             title.set_text("{}: Step n°{}".format("Warmup" if i < len_warmup else ("Training" if i < len_warmup + len_training else "Prediction"),i))
 
             #Update of the histogram
-
             value = [np.mean(self.historic[i]* bin_position[j]) for j in range(len(bins)-1)]
-                #We take the mean inside the bin interval
+            #We take the mean inside the bin interval
             for rect,h in zip(bar,value):
                 rect.set_height(h)
-            return scat,bar
+
+            return bar
 
         anim = animation.FuncAnimation(figure, update_frame,frames = np.arange(1,len(self.historic)),interval = 25)
         if name != "":
@@ -541,7 +535,7 @@ def compute_error(result,expected):
     "Computes a least squared error between two arrays."
     gap = 0
     for i in range(len(result)):
-        gap += np.linalg.norm(result[i]-expected[i])/np.sqrt(i+1)
+        gap += np.linalg.norm(result[i]-expected[i])
     return gap
 
 
@@ -594,8 +588,10 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
     optimal_delay = -1
     i,j = 0,0
     while nb_cols*(i) + j+1 <= len(delays):
-        axes[i][j].plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), input[len_warmup + len_training - delays[nb_cols*i + j] : nb_iter + len_warmup + len_training - delays[nb_cols*i + j]],label = label_input)
-        axes[i][j].plot(range(len_warmup+len_training,nb_iter+len_warmup+len_training), simus[nb_cols*i + j],'--', label = "ESN response")
+        x = range(len_warmup+len_training,nb_iter+len_warmup+len_training)
+        expected = input[len_warmup + len_training - delays[nb_cols*i + j] : nb_iter + len_warmup + len_training - delays[nb_cols*i + j]]
+        axes[i][j].plot(x, expected ,'--',label = label_input)
+        axes[i][j].plot(x, simus[nb_cols*i + j],'-', label = "ESN response")
         axes[i][j].set_title("Delay: {} steps".format(delays[nb_cols*i + j]))
 
         error = compute_error(simus[nb_cols*i + j],input[len_warmup + len_training - delays[nb_cols*i + j] : nb_iter + len_warmup + len_training - delays[nb_cols*i + j]])
@@ -674,7 +670,8 @@ if __name__  == "__main__":
     if label_input == "Mackey Glass":
         input = np.load("mackey-glass.npy")[np.newaxis].T
     elif label_input == "Sinus":
-        input = np.sin(np.arange(start = 0,stop = 1000,step = 1/10))
+        t = np.arange(start = 0,stop = 1000,step = 1/10)
+        input = np.sin(t) + 0.1 * np.cos(10*t)
     elif label_input == "Constant":
         input = 10 * np.ones((1000000))
 
