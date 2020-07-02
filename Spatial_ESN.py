@@ -16,7 +16,7 @@ import Bridson_sampling
 _data = {
     "seed"           : 21,
     "label_input" : "Sinus",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
-    "display_animation" : True,
+    "display_animation" : False,
     "display_connectivity" : False,     # If the internal structure is displayed. Allows better understanding and checking.
     "savename" : "",             #The file where the animation is saved
     "number_neurons" : 10**2,
@@ -26,11 +26,12 @@ _data = {
     "delays" : [i for i in range(100)],
     "delays" : [0],
     "sparsity" : 0.3,          #The probability of connection to the input/output (distance-based)
-    "intern_sparsity" : 0.15,   #The probability of connection inside of the reservoir.
-    "spectral_radius" : 0.8,
-    "leak_rate" : 0.7,         #The greater it is, the more a neuron will lose its previous activity
+    "intern_sparsity" : 0.5,   #The probability of connection inside of the reservoir.
+    "spectral_radius" : 0.2,
+    "leak_rate" : 0.5,         #The greater it is, the more a neuron will lose its previous activity
     "epsilon" : 1e-8,
     "bin_size" : 0.05,
+    "noise" : 0.000,
     "timestamp"      : "",
     "git_branch"     : "",
     "git_hash"       : "",
@@ -48,39 +49,11 @@ def sigmoid(x):
 def tanh(x):
     return np.tanh(x)
 
-def blueSampling(number_points,scaling = 10, xmin = 0, xmax = 1, ymin = 0, ymax = 0.5):
-    '''
-    Generates a blueSampling distribution in the plane for the neurons.
-    Based on https://blog.demofox.org/2017/10/20/generating-blue-noise-sample-points-with-mitchells-best-candidate-algorithm/
-    :parameters:
-        -number_points : the number of point that must be placed
-        -scaling : the factor for the number of point generated at each step, 1 by default.
-        -xmin,xmax, ymin, ymax: the rectangle in which the points are set in.
-    :output:
-        A numpy array of dimension (number_points,2) containing the points randomly generated
-    '''
-    points = np.zeros((number_points,2))
-    points[0,0] = np.random.uniform(xmin,xmax,(1))
-    points[0,1] = np.random.uniform(ymin,ymax,(1))
-    for i in range(1,number_points):
-        #Generation of the random points
-        candidates = np.zeros((scaling * i, 2))
-        candidates[:,0] = np.random.uniform(xmin,xmax,(scaling * i))
-        candidates[:,1] = np.random.uniform(ymin,ymax,(scaling * i))
-
-        #Selection of the furthest one:
-        distances = distance.cdist(candidates,points[:i]) #distances[i,j] : euclidian distance between candidates[i] and points[j]
-
-        #We consider the point whose minimal distance to the already set points is the greatest.
-        index_furthest = np.unravel_index(np.argmax(np.argmin(distances, axis =0) , axis=0), (number_points))
-        points[i,:] = candidates[index_furthest]
-    return points
-
 def generation_Bridson(number_points, k = 30, xmax = 1, ymax = 0.5):
     '''
     Generates a random sampling of point with blue noise properties.
     Uses the method described in Fast Poisson Disk Sampling in Arbitrary Dimensions, Robert Bridson
-    Implementation by Nicolas Rougier, see Bridson_sampling.py file for credits.
+    Implementation by Nicolas Rougier, see Bridson_sampling.py file or https://www.labri.fr/perso/nrougier/from-python-to-numpy.
 
     :parameters:
         -number_points: the number of points we want generated. There will be an approximation of this number generated
@@ -90,7 +63,13 @@ def generation_Bridson(number_points, k = 30, xmax = 1, ymax = 0.5):
     :output:
         A numpy array of dimension (number_points,2) containing the points randomly generated
     '''
+    density = np.pi * np.sqrt(3) /6
+    delta = (density * (xmax + ymax))**2 - 4*(density-np.pi*number_points)*xmax*ymax*density
+    assert delta >=0, "Invalid solution for radius"
+    radius = max((density * (xmax + ymax) + np.sqrt(delta)) / (2*(density - np.pi * number_points)),(density * (xmax + ymax) - np.sqrt(delta)) / (2*(density - np.pi * number_points)))
+    #print(radius)
     optimal_radius = np.sqrt(np.sqrt(3) *xmax * ymax/ (6 * number_points))
+
     return Bridson_sampling.Bridson_sampling(width = xmax, height = ymax, radius = optimal_radius, k = k)
 
 
@@ -188,7 +167,7 @@ class Spatial_ESN:
             self.W_in *= connection_in
 
             self.W_out = np.random.uniform(-1,1,(self.N,self.number_output))
-            #self.connection_out = np.tile(1-self.x["position"][:,0],(self.number_output,1)).T < (np.random.uniform(0,self.sparsity,self.W_out.shape))
+            #self.connection_out = np.tile(1-self.x["position"][:,0],(self. number_output,1)).T < (np.random.uniform(0,self.sparsity,self.W_out.shape))
             self.connection_out = (1-self.x["position"][:,0]) < (np.random.uniform(0,self.sparsity,self.N))  #The neurons connected to the output are connected to all of the exit neurons. (Makes the training easier)
             if self.number_output == 1:
                 self.W_out *= np.tile(self.connection_out[np.newaxis].T,(self.number_output,1))
@@ -210,6 +189,8 @@ class Spatial_ESN:
 
             self.W_back = np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix, not used in the test cases.
             self.y = np.zeros((self.number_output))
+
+            print("Norm of W :" ,np.linalg.norm(self.W))
 
     def update(self,input = np.array([]) ,addNoise = False):
         '''
@@ -306,7 +287,6 @@ class Spatial_ESN:
         figure, axes = plt.subplots(nrows = 2,ncols = 1,sharex = True, frameon=False)
         title = figure.suptitle("Warmup: Step n°0")
 
-
         bins = np.arange(0, 1 + bin_len, bin_len)
         bin_position = np.array([(self.x["position"][:,0] >= bins[i]) * (self.x["position"][:,0] < bins[i+1]) for i in range(len(bins)-1)])
         #Initialisation of the scatterplot
@@ -332,15 +312,17 @@ class Spatial_ESN:
         norm = mpl.colors.Normalize(vmin = -1, vmax = 1, clip=True)
         mapper = cm.ScalarMappable(norm = norm, cmap = cm.Blues_r)  #The Voronoi colormap
 
-        list_fill = []
+        list_fills = []
 
         for neuron_index in range(self.N):
             region = vor.regions[vor.point_region[neuron_index]]
             polygon = [vor.vertices[i] for i in region]
-            axes[0].fill(*zip(*polygon), color=mapper.to_rgba(2*neuron_index-1))
+            list_fills.append(axes[0].fill(*zip(*polygon), color=mapper.to_rgba(2*neuron_index/self.N-1)))
 
         axes[0].set_ylim(0,self.ymax)
         axes[0].set_xlim(0,1)
+
+        colors_array = mapper.to_rgba(np.copy(self.historic))   #Maps the color of each past activity to display.
 
         def update_frame(i):
 
@@ -354,9 +336,17 @@ class Spatial_ESN:
             for rect,h in zip(bar,value):
                 rect.set_height(h)
 
-            return bar
+            count = 0
+            for fill in list_fills:
+                newcolor = colors_array[i][count]
+                #print(newcolor)
+                fill[0].set_fc(newcolor)
+                count += 1
+                pass
+        #    print(fill[0].get_facecolor())
+            #return bar, list_fills
 
-        anim = animation.FuncAnimation(figure, update_frame,frames = np.arange(1,len(self.historic)),interval = 25)
+        anim = animation.FuncAnimation(figure, update_frame,frames = np.arange(1,len(self.historic)),interval = 10)
         if name != "":
             print("---Saving the animation---")
             anim.save(name+".mp4", fps=30)
@@ -607,7 +597,8 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
         #axes[i][j].legend()
     fig.suptitle("ESN with {} neurons\n sparsity toward external neurons {}\n internal sparsity {}".format(esn.N,esn.sparsity,esn.intern_sparsity))
     #fig.tight_layout(pad=3.0)
-    #plt.legend()
+    if len(delays) <=4:
+        plt.legend()
     print("The optimal delay for those parameters is {},with an error of {}".format(optimal_delay,min_error))
     plt.show()
 
@@ -641,7 +632,7 @@ def save(filename, data=None):
     data["git_branch"] = get_git_revision_branch()
     data["git_hash"] = get_git_revision_hash()
     with open(filename, "w") as outfile:
-        json.dump(data, outfile)
+        json.dump(data, outfile,indent = 1)
 
 def load(filename):
     """ Load parameters from a json file """
@@ -676,7 +667,7 @@ if __name__  == "__main__":
         input = 10 * np.ones((1000000))
 
     #Creating the ESN
-    test= Spatial_ESN(number_neurons = number_neurons, sparsity = sparsity,intern_sparsity = intern_sparsity, number_input = 1, number_output = 1, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = 0)
+    test= Spatial_ESN(number_neurons = number_neurons, sparsity = sparsity,intern_sparsity = intern_sparsity, number_input = 1, number_output = 1, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = noise)
     test.W_back *= 0
     test.x["activity"]*=0
     #test.W_in = (test.W_in != 0)
