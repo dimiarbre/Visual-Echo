@@ -15,9 +15,9 @@ import Bridson_sampling
 # Default parameters
 _data = {
     "seed"           : 21,
-    "label_input" : "Sinus",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
+    "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
     "display_animation" : False,
-    "display_connectivity" : False,     # If the internal structure is displayed. Allows better understanding and checking.
+    "display_connectivity" : True,     # If the internal structure is displayed. Allows better understanding and checking.
     "savename" : "",             #The file where the animation is saved
     "number_neurons" : 10**2,
     "len_warmup" : 200,                #100,
@@ -26,9 +26,9 @@ _data = {
     "delays" : [i for i in range(100)],
     "delays" : [0],
     "sparsity" : 0.3,          #The probability of connection to the input/output (distance-based)
-    "intern_sparsity" : 0.5,   #The probability of connection inside of the reservoir.
-    "spectral_radius" : 0.2,
-    "leak_rate" : 0.5,         #The greater it is, the more a neuron will lose its previous activity
+    "intern_sparsity" : 0.15,   #The probability of connection inside of the reservoir.
+    "spectral_radius" : 1.25,
+    "leak_rate" : 0.7,         #The greater it is, the more a neuron will lose its previous activity
     "epsilon" : 1e-8,
     "bin_size" : 0.05,
     "noise" : 0.000,
@@ -63,13 +63,19 @@ def generation_Bridson(number_points, k = 30, xmax = 1, ymax = 0.5):
     :output:
         A numpy array of dimension (number_points,2) containing the points randomly generated
     '''
-    density = np.pi * np.sqrt(3) /6
-    delta = (density * (xmax + ymax))**2 - 4*(density-np.pi*number_points)*xmax*ymax*density
-    assert delta >=0, "Invalid solution for radius"
-    radius = max((density * (xmax + ymax) + np.sqrt(delta)) / (2*(density - np.pi * number_points)),(density * (xmax + ymax) - np.sqrt(delta)) / (2*(density - np.pi * number_points)))
-    #print(radius)
-    optimal_radius = np.sqrt(np.sqrt(3) *xmax * ymax/ (6 * number_points))
+    density = np.pi * np.sqrt(3) /6 #Optima ldensity of packing circles in space
 
+    #Trial for increased rectangle size
+    #delta = (density * (xmax + ymax))**2 - 4*(density-np.pi*number_points)*xmax*ymax*density
+    #assert delta >=0, "Invalid solution for radius"
+    #radius = max((density * (xmax + ymax) + np.sqrt(delta)) / (2*(density - np.pi * number_points)),(density * (xmax + ymax) - np.sqrt(delta)) / (2*(density - np.pi * number_points)))
+    #print(radius)
+
+    #Former and first result
+    #optimal_radius = np.sqrt(np.sqrt(3) *xmax * ymax/ (6 * number_points))
+
+
+    optimal_radius =  np.sqrt((xmax * ymax)/(2*number_points*np.sqrt(3)))
     return Bridson_sampling.Bridson_sampling(width = xmax, height = ymax, radius = optimal_radius, k = k)
 
 
@@ -101,11 +107,6 @@ class Spatial_ESN:
         self.leak_rate = leak_rate
         self.noise = noise
         self.isRecording = False
-        size = int(np.sqrt(self.N))
-        if size**2 == self.N:
-            self.squared_size = size
-        else:
-            self.squared_size = -1
         self.sparsity = sparsity
         self.intern_sparsity = intern_sparsity
         self.spectral_radius = spectral_radius
@@ -130,10 +131,10 @@ class Spatial_ESN:
         if completeReset:
             print("---Beginning Blue Noise Sampling---")
             newpoints =  generation_Bridson(self.N,ymax = self.ymax)      #blueSampling(self.N)
+            #We will have a number of neurons sligthly different from the expexted one, since the Bridson generation does not provide a fixed number of points.
             print("---Done---")
 
-            #We will have a number of neurons sligthly different from the expexted one, since the Bridson generation does not provide a fixed number of points.
-            self.N = newpoints.shape[0]
+            self.N = newpoints.shape[0]  #Update to the actual number of neurons generated.
 
         self.x = np.zeros((self.N),dtype = [("activity",float),("position",float,(2,)),("mean",float)])
         self.x["activity"] = np.random.uniform(-1,1,(self.N,))   #Internal state of the reservoir. Initialisation might change
@@ -190,7 +191,9 @@ class Spatial_ESN:
             self.W_back = np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix, not used in the test cases.
             self.y = np.zeros((self.number_output))
 
-            print("Norm of W :" ,np.linalg.norm(self.W))
+            norm = np.linalg.norm(self.W)
+            print("Norm of W :" ,norm)
+            print("Norm of W / number of connections in W : ",norm / np.sum(intern_connections) )
 
     def update(self,input = np.array([]) ,addNoise = False):
         '''
@@ -200,15 +203,11 @@ class Spatial_ESN:
             input = np.zeros((self.number_input))
         else:
             input = np.array(input)
-        u = 1.0 , input             #We add the bias.
-        matrixA = np.dot(self.W_in, u)
+        u = np.concatenate(([1.0] , input))             #We add the bias.
+        matrixA = np.dot(self.W_in, u + addNoise * self.generateNoise())    #We put noise in the input if we are training.
         matrixB = np.dot(self.W , self.x["activity"])
         matrixC = 0 #self.W_back @ self.y #Feature deactivated and not tested in this particular case.
-        if addNoise:
-            self.x["activity"] = (1-self.leak_rate) * self.x["activity"] + self.leak_rate * tanh(matrixA + matrixB + matrixC + self.generateNoise())
-        else:
-            self.x["activity"] = (1-self.leak_rate) * self.x["activity"] + self.leak_rate * tanh(matrixA + matrixB + matrixC)
-
+        self.x["activity"] = (1-self.leak_rate) * self.x["activity"] + self.leak_rate * tanh(matrixA + matrixB + matrixC )
         if np.isnan(np.sum(self.x["activity"])):    #Mostly for debugging purposes.
             raise Exception("Nan in matrix x : {} \n matrix y: {}".format(self.x["activity"],self.y))
 
@@ -248,9 +247,9 @@ class Spatial_ESN:
         self.y = self.W_out @ self.x["activity"]   #Output state of the reservoir. After this, it will be computed from the state of the reservoir in the update function.
 
     def generateNoise(self):
-        return np.random.uniform(-self.noise,self.noise,(self.number_output)) #A random vector beetween -noise and noise
+        return np.random.uniform(-self.noise,self.noise,(self.number_input)) #A random vector beetween -noise and noise
 
-    def simulation(self, nb_iter, inputs = [],expected = [],len_warmup = 0 ,len_training = 0, delay = 0, reset = False):
+    def simulation(self, nb_iter, inputs = [], expected = [],len_warmup = 0 ,len_training = 0, delay = 0, reset = False):
         '''
         Simulates the behaviour of the ESN given :
         - input : a starting sequence, wich will be followed.
@@ -309,7 +308,7 @@ class Spatial_ESN:
         #We add 4 dummy points for display (see https://stackoverflow.com/questions/20515554/colorize-voronoi-diagram)
         vor = Voronoi(np.concatenate((self.x["position"],np.array([[999,999],[-999,999],[999,-999],[-999,-999]]))))
         voronoi_plot_2d(vor,axes[0],show_points=True, show_vertices=False, s=1)
-        norm = mpl.colors.Normalize(vmin = -1, vmax = 1, clip=True)
+        norm = mpl.colors.Normalize(vmin = -1, vmax = 1)
         mapper = cm.ScalarMappable(norm = norm, cmap = cm.Blues_r)  #The Voronoi colormap
 
         list_fills = []
@@ -317,13 +316,12 @@ class Spatial_ESN:
         for neuron_index in range(self.N):
             region = vor.regions[vor.point_region[neuron_index]]
             polygon = [vor.vertices[i] for i in region]
-            list_fills.append(axes[0].fill(*zip(*polygon), color=mapper.to_rgba(2*neuron_index/self.N-1)))
+            list_fills.append(axes[0].fill(*zip(*polygon), color=mapper.to_rgba(self.historic[0][neuron_index])))
 
         axes[0].set_ylim(0,self.ymax)
         axes[0].set_xlim(0,1)
 
         colors_array = mapper.to_rgba(np.copy(self.historic))   #Maps the color of each past activity to display.
-
         def update_frame(i):
 
             #Update of the neurons display
@@ -362,7 +360,6 @@ class Spatial_ESN:
         '''
         Stores an array of the current activity state.
         '''
-        assert self.squared_size !=-1, "Non squared number of neurons: {}".format(self.N)
         self.historic.append(np.copy(self.x["activity"]))
 
     def disp_connectivity(self):
@@ -528,6 +525,20 @@ def compute_error(result,expected):
         gap += np.linalg.norm(result[i]-expected[i])
     return gap
 
+def plot_distance(result,expected,beginning_len,title = "Comparison of efficiency"):
+    duration = len(result)
+    fig,axes = plt.subplots(nrows = 2, ncols = 1, sharex = True)
+    x = [i for i in range(beginning_len,beginning_len + duration)]
+    y = np.abs(np.array(result) - np.array(expected)[beginning_len:beginning_len +duration,])
+    axes[0].plot(x, y)
+    axes[1].plot(x, y)
+    axes[1].set_title("Zoomed in version")
+    axes[0].set_title(title)
+    axes[1].set_ylim([0,1])
+    plt.xlabel("Epochs")
+    fig.text(0.06, 0.5, 'Distance between expected and real signal', ha='center', va='center', rotation='vertical')
+
+    plt.show()
 
 def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = [0],nb_iter = -1, display_anim = True,display_connectivity = True,bin_size = 0.1, savename = ""):
     '''
@@ -601,6 +612,9 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
         plt.legend()
     print("The optimal delay for those parameters is {},with an error of {}".format(optimal_delay,min_error))
     plt.show()
+    plt.close()
+    plot_distance(expected = input, result = simus[0],beginning_len = len_warmup + len_training)
+
 
 
 #----------------------------------------------------------------------------------------------------------------------
@@ -665,7 +679,7 @@ if __name__  == "__main__":
         input = np.sin(t) + 0.1 * np.cos(10*t)
     elif label_input == "Constant":
         input = 10 * np.ones((1000000))
-
+    print("Shape : ",input.shape)
     #Creating the ESN
     test= Spatial_ESN(number_neurons = number_neurons, sparsity = sparsity,intern_sparsity = intern_sparsity, number_input = 1, number_output = 1, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = noise)
     test.W_back *= 0
