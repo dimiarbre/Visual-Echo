@@ -14,10 +14,10 @@ import Bridson_sampling
 
 # Default parameters
 _data = {
-    "seed"           : 21,
+    "seed"           : 12,
     "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
     "display_animation" : False,
-    "display_connectivity" : True,     # If the internal structure is displayed. Allows better understanding and checking.
+    "display_connectivity" : False,     # If the internal structure is displayed. Allows better understanding and checking.
     "savename" : "",             #The file where the animation is saved
     "number_neurons" : 10**2,
     "len_warmup" : 200,                #100,
@@ -27,11 +27,11 @@ _data = {
     "delays" : [0],
     "sparsity" : 0.3,          #The probability of connection to the input/output (distance-based)
     "intern_sparsity" : 0.15,   #The probability of connection inside of the reservoir.
-    "spectral_radius" : 1.25,
+    "spectral_radius" : 1,
     "leak_rate" : 0.7,         #The greater it is, the more a neuron will lose its previous activity
     "epsilon" : 1e-8,
     "bin_size" : 0.05,
-    "noise" : 0.000,
+    "noise" : 0.02,
     "timestamp"      : "",
     "git_branch"     : "",
     "git_hash"       : "",
@@ -340,7 +340,6 @@ class Spatial_ESN:
                 #print(newcolor)
                 fill[0].set_fc(newcolor)
                 count += 1
-                pass
         #    print(fill[0].get_facecolor())
             #return bar, list_fills
 
@@ -595,7 +594,7 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
         axes[i][j].plot(x, simus[nb_cols*i + j],'-', label = "ESN response")
         axes[i][j].set_title("Delay: {} steps".format(delays[nb_cols*i + j]))
 
-        error = compute_error(simus[nb_cols*i + j],input[len_warmup + len_training - delays[nb_cols*i + j] : nb_iter + len_warmup + len_training - delays[nb_cols*i + j]])
+        error = compute_error(simus[nb_cols*i + j],expected)
         if error < min_error:
             min_error = error
             optimal_delay = delays[nb_cols*i + j]
@@ -679,7 +678,6 @@ if __name__  == "__main__":
         input = np.sin(t) + 0.1 * np.cos(10*t)
     elif label_input == "Constant":
         input = 10 * np.ones((1000000))
-    print("Shape : ",input.shape)
     #Creating the ESN
     test= Spatial_ESN(number_neurons = number_neurons, sparsity = sparsity,intern_sparsity = intern_sparsity, number_input = 1, number_output = 1, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = noise)
     test.W_back *= 0
