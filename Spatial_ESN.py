@@ -14,9 +14,9 @@ import Bridson_sampling
 
 # Default parameters
 _data = {
-    "seed"           : 12,
+    "seed"           : 21,
     "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
-    "display_animation" : False,
+    "display_animation" : True,
     "display_connectivity" : False,     # If the internal structure is displayed. Allows better understanding and checking.
     "savename" : "",             #The file where the animation is saved
     "number_neurons" : 10**2,
@@ -321,7 +321,9 @@ class Spatial_ESN:
         axes[0].set_ylim(0,self.ymax)
         axes[0].set_xlim(0,1)
 
+
         colors_array = mapper.to_rgba(np.copy(self.historic))   #Maps the color of each past activity to display.
+        #colors_array = mapper.to_rgba(np.copy(self.historic * (1+ self.x["position"][:,0])) )   #Maps the color of each past activity to display while amplifying the behaviour for neurons furthers in the reservoir. 
         def update_frame(i):
 
             #Update of the neurons display
