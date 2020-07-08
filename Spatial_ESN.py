@@ -17,21 +17,21 @@ _data = {
     "seed"           : 21,
     "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
     "display_animation" : True,
-    "display_connectivity" : False,     # If the internal structure is displayed. Allows better understanding and checking.
+    "display_connectivity" : True,     # If the internal structure is displayed. Allows better understanding and checking.
     "savename" : "",             #The file where the animation is saved
-    "number_neurons" : 10**2,
+    "number_neurons" : 20**2,
     "len_warmup" : 200,                #100,
     "len_training" : 1000,             #1000,
-    "simulation_len" : 500,
+    "simulation_len" : 1000,
     "delays" : [i for i in range(100)],
     "delays" : [0],
-    "sparsity" : 0.3,          #The probability of connection to the input/output (distance-based)
-    "intern_sparsity" : 0.15,   #The probability of connection inside of the reservoir.
+    "external_sparsity" : 0.3,          #The probability of connection to the input/output (distance-based)
+    "intern_sparsity" : 0.1,   #The probability of connection inside of the reservoir.
     "spectral_radius" : 1,
     "leak_rate" : 0.7,         #The greater it is, the more a neuron will lose its previous activity
     "epsilon" : 1e-8,
     "bin_size" : 0.05,
-    "noise" : 0.02,
+    "noise" : 0.005,
     "timestamp"      : "",
     "git_branch"     : "",
     "git_hash"       : "",
@@ -63,7 +63,7 @@ def generation_Bridson(number_points, k = 30, xmax = 1, ymax = 0.5):
     :output:
         A numpy array of dimension (number_points,2) containing the points randomly generated
     '''
-    density = np.pi * np.sqrt(3) /6 #Optima ldensity of packing circles in space
+    density = np.pi * np.sqrt(3) /6 #Optimal density of packing circles in space
 
     #Trial for increased rectangle size
     #delta = (density * (xmax + ymax))**2 - 4*(density-np.pi*number_points)*xmax*ymax*density
@@ -75,7 +75,7 @@ def generation_Bridson(number_points, k = 30, xmax = 1, ymax = 0.5):
     #optimal_radius = np.sqrt(np.sqrt(3) *xmax * ymax/ (6 * number_points))
 
 
-    optimal_radius =  np.sqrt((xmax * ymax)/(2*number_points*np.sqrt(3)))
+    optimal_radius =  np.sqrt((xmax * ymax)/(number_points*np.sqrt(3)))
     return Bridson_sampling.Bridson_sampling(width = xmax, height = ymax, radius = optimal_radius, k = k)
 
 
@@ -86,12 +86,13 @@ class Spatial_ESN:
     Notes that this is a specific Echo State Network for training purpose, without the maximum features.
     It may ultimately be a basic one for spatialisation purpose.
     '''
-    def __init__(self,number_neurons, sparsity,intern_sparsity,number_input,number_output,spectral_radius,leak_rate,noise,isCopy = False):
+    def __init__(self,number_neurons, external_sparsity, intern_sparsity, number_input, number_output, spectral_radius, leak_rate, noise, isCopy = False):
         '''
         Creates an instance of spatial ESN given some parameters
         :parameters:
             - number_neurons : The number of neurons in the reservoir
-            - sparsity : Used for the connection in the spatial reservoir. The higher it is, the more connections there are.
+            - external_sparsity: The probability to connect to the output/input from inside the reservoir.
+            - intern_sparsity : Used for the connection in the spatial reservoir. The higher it is, the more connections there are.
             - number_input : How many input neurons.
             - number_output : How many output neurons.
             - spectral_radius : the desired spectral radius, depending on how lastong we want the memory to be.
@@ -107,7 +108,7 @@ class Spatial_ESN:
         self.leak_rate = leak_rate
         self.noise = noise
         self.isRecording = False
-        self.sparsity = sparsity
+        self.external_sparsity = external_sparsity
         self.intern_sparsity = intern_sparsity
         self.spectral_radius = spectral_radius
         self.historic = []
@@ -156,7 +157,7 @@ class Spatial_ESN:
             deltax = np.tile(self.x["position"][:,0],(self.N,1))
             deltax = (deltax.T - deltax)
 
-        #    self.W *= np.random.uniform(-1,1,self.W.shape) < self.sparsity * (1- np.eye(self.N))
+        #    self.W *= np.random.uniform(-1,1,self.W.shape) < self.external_sparsity * (1- np.eye(self.N))
             intern_connections = distances < np.random.uniform(0,self.intern_sparsity,(distances.shape))
             self.W *= intern_connections * (1-np.eye(self.N)) * (deltax > 0)   #Connects spatially
 
@@ -164,12 +165,12 @@ class Spatial_ESN:
             self.W_in = np.random.uniform(-1,1,(self.N, 1 + self.number_input))    #We initialise between -1 and 1 uniformly, maybe to change. The added input will be the bias
 
             #self.W_in = np.ones((self.N, 1 + self.number_input)) #To better visualize, but to delete !
-            connection_in = np.tile(self.x["position"][:,0],(self.number_input + 1,1)).T/(self.sparsity) < (np.random.uniform(0,1,self.W_in.shape))
+            connection_in = np.tile(self.x["position"][:,0],(self.number_input + 1,1)).T/(self.external_sparsity) < (np.random.uniform(0,1,self.W_in.shape))
             self.W_in *= connection_in
 
             self.W_out = np.random.uniform(-1,1,(self.N,self.number_output))
-            #self.connection_out = np.tile(1-self.x["position"][:,0],(self. number_output,1)).T < (np.random.uniform(0,self.sparsity,self.W_out.shape))
-            self.connection_out = (1-self.x["position"][:,0]) < (np.random.uniform(0,self.sparsity,self.N))  #The neurons connected to the output are connected to all of the exit neurons. (Makes the training easier)
+            #self.connection_out = np.tile(1-self.x["position"][:,0],(self. number_output,1)).T < (np.random.uniform(0,self.external_sparsity,self.W_out.shape))
+            self.connection_out = (1-self.x["position"][:,0]) < (np.random.uniform(0,self.external_sparsity,self.N))  #The neurons connected to the output are connected to all of the exit neurons. (Makes the training easier)
             if self.number_output == 1:
                 self.W_out *= np.tile(self.connection_out[np.newaxis].T,(self.number_output,1))
             else:
@@ -179,6 +180,8 @@ class Spatial_ESN:
             #Spectral radius control:
             #A matrix taking into account the feedback from the output to the input, trying to imitate the echo state property.
             pseudo_W = self.W + (self.W_out @ self.W_in[:,1:].T).T     #This allows to have a non triangular matrix, giving a spectral radius different from 0.
+
+            '''
             current_radius = np.max(np.abs(np.linalg.eigvals(pseudo_W)))
 
             if current_radius == 0.0:
@@ -186,6 +189,7 @@ class Spatial_ESN:
             else:
                 #self.W *= self.spectral_radius/current_radius            #We normalize the weight matrix to get the desired spectral radius.
                 pass
+            '''
             self.W *= self.spectral_radius
 
             self.W_back = np.random.uniform(-1,1,(self.N,self.number_output))  #The Feedback matrix, not used in the test cases.
@@ -247,7 +251,7 @@ class Spatial_ESN:
         self.y = self.W_out @ self.x["activity"]   #Output state of the reservoir. After this, it will be computed from the state of the reservoir in the update function.
 
     def generateNoise(self):
-        return np.random.uniform(-self.noise,self.noise,(self.number_input)) #A random vector beetween -noise and noise
+        return self.noise * np.random.uniform(-1,1,(self.number_input)) #A random vector beetween -noise and noise
 
     def simulation(self, nb_iter, inputs = [], expected = [],len_warmup = 0 ,len_training = 0, delay = 0, reset = False):
         '''
@@ -308,22 +312,31 @@ class Spatial_ESN:
         #We add 4 dummy points for display (see https://stackoverflow.com/questions/20515554/colorize-voronoi-diagram)
         vor = Voronoi(np.concatenate((self.x["position"],np.array([[999,999],[-999,999],[999,-999],[-999,-999]]))))
         voronoi_plot_2d(vor,axes[0],show_points=True, show_vertices=False, s=1)
+
         norm = mpl.colors.Normalize(vmin = -1, vmax = 1)
-        mapper = cm.ScalarMappable(norm = norm, cmap = cm.Blues_r)  #The Voronoi colormap
+        mapper = cm.ScalarMappable(norm = norm, cmap = cm.coolwarm)  #The Voronoi colormap
 
-        list_fills = []
-
+        #list_fills = []
+        polygons = []
+        facecolors = []
         for neuron_index in range(self.N):
             region = vor.regions[vor.point_region[neuron_index]]
             polygon = [vor.vertices[i] for i in region]
-            list_fills.append(axes[0].fill(*zip(*polygon), color=mapper.to_rgba(self.historic[0][neuron_index])))
+            polygons.append(polygon)
+            facecolors.append((0,0,0,1))
+
+            #list_fills.append(axes[0].fill(*zip(*polygon), color=mapper.to_rgba(self.historic[0][neuron_index])))
+
 
         axes[0].set_ylim(0,self.ymax)
         axes[0].set_xlim(0,1)
 
 
-        colors_array = mapper.to_rgba(np.copy(self.historic))   #Maps the color of each past activity to display.
-        #colors_array = mapper.to_rgba(np.copy(self.historic * (1+ self.x["position"][:,0])) )   #Maps the color of each past activity to display while amplifying the behaviour for neurons furthers in the reservoir. 
+        polycollection = mpl.collections.PolyCollection(polygons)
+        #colors_array = mapper.to_rgba(np.copy(self.historic))   #Maps the color of each past activity to display.
+        colors_array = mapper.to_rgba(np.copy(self.historic * (1+ 2*self.x["position"][:,0])) )   #Maps the color of each past activity to display while amplifying the behaviour for neurons furthers in the reservoir.
+        polycollection.set_facecolors(colors_array[0])
+        axes[0].add_collection(polycollection)
         def update_frame(i):
 
             #Update of the neurons display
@@ -336,12 +349,14 @@ class Spatial_ESN:
             for rect,h in zip(bar,value):
                 rect.set_height(h)
 
+            polycollection.set_fc(colors_array[i])
+            '''
             count = 0
             for fill in list_fills:
                 newcolor = colors_array[i][count]
                 #print(newcolor)
-                fill[0].set_fc(newcolor)
-                count += 1
+                .set_fc(newcolor)
+                count += 1'''
         #    print(fill[0].get_facecolor())
             #return bar, list_fills
 
@@ -355,7 +370,6 @@ class Spatial_ESN:
 
         plt.close()
         self.isRecording = False
-
 
     def record_state(self):
         '''
@@ -381,7 +395,7 @@ class Spatial_ESN:
         print("Number of connection inside the reservoir : ",np.sum(intern_connections))
         print("Number of connection to the output : ",np.sum(connection_out))
 
-        figure.suptitle("{} neurons, sparsity = {} ".format(self.N, self.sparsity))
+        figure.suptitle("{} neurons, external sparsity = {} ".format(self.N, self.external_sparsity))
 
         print("---Placing the neurons, this migth take a while---")
         #For the initial display, we show the connection to input and output -> the following lines compute them
@@ -492,7 +506,7 @@ class Spatial_ESN:
         Returns an independent copy of the current ESN. Used to compare different ESN with same initialization.
         '''
         print("---Beginning copying---")
-        buffer = Spatial_ESN(number_neurons = self.N, sparsity = self.sparsity,intern_sparsity = self.intern_sparsity, \
+        buffer = Spatial_ESN(number_neurons = self.N, external_sparsity = self.external_sparsity,intern_sparsity = self.intern_sparsity, \
             number_input = self.number_input,number_output = self.number_output,\
             spectral_radius = self.spectral_radius,leak_rate = self.leak_rate,noise = self.noise,isCopy = True)
         buffer.W = np.copy(self.W)
@@ -564,7 +578,7 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
 
     simus = []      #To handle several copies of a simulation. Used to compare the efficiency of delay.
     for i in range(len(delays)-1):
-        expected = input[len_warmup - delays[i]:len_warmup - delays[i] + len_training] #The awaited results during the training. delays allow to offset the expected result, due to delay to cross the reservoir.
+        expected = input[len_warmup + delays[i]:len_warmup + delays[i] + len_training] #The awaited results during the training. delays allow to offset the expected result, due to delay to cross the reservoir.
         copy = esn.copy()
         simus.append(copy.simulation(nb_iter = nb_iter, inputs = input, expected = expected, len_warmup = len_warmup, len_training = len_training, reset = False ))
 
@@ -607,7 +621,7 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
         else:
             j+=1
         #axes[i][j].legend()
-    fig.suptitle("ESN with {} neurons\n sparsity toward external neurons {}\n internal sparsity {}".format(esn.N,esn.sparsity,esn.intern_sparsity))
+    fig.suptitle("ESN with {} neurons\n external sparsity: {}\n internal sparsity {}".format(esn.N,esn.external_sparsity,esn.intern_sparsity))
     #fig.tight_layout(pad=3.0)
     if len(delays) <=4:
         plt.legend()
@@ -616,8 +630,24 @@ def compare_prediction(esn,input,label_input ,len_warmup,len_training, delays = 
     plt.close()
     plot_distance(expected = input, result = simus[0],beginning_len = len_warmup + len_training)
 
+def generate_basic_ESN(number_neurons, sparsity, number_input, number_output, spectral_radius, leak_rate, noise):
+    '''
+    Creates a basic ESN, but using the spatial ESN. The idea is to be able to compare the results.
+    '''
+    spatial_esn = Spatial_ESN(number_neurons = number_neurons, external_sparsity = 1,intern_sparsity = sparsity, number_input = number_input, \
+                    number_output = number_output, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = noise)
 
+    #We must regenerate the W matrix, since it is generated with space contraints otherwise.
+    spatial_esn.W = np.random.uniform(-1,1,spatial_esn.W.shape)
+    intern_connections = np.random.uniform(0,1,spatial_esn.W.shape) < sparsity
+    spatial_esn.W *= intern_connections
+    current_radius = np.max(np.abs(np.linalg.eigvals(spatial_esn.W)))
+    if current_radius == 0.0:
+        raise Exception("Null Spectral radius for generated matrix")
+    else:
+        spatial_esn.W *= spectral_radius/current_radius            #We normalize the weight matrix to get the desired spectral radius.
 
+    return spatial_esn
 #----------------------------------------------------------------------------------------------------------------------
 #File and json handling
 
@@ -681,7 +711,7 @@ if __name__  == "__main__":
     elif label_input == "Constant":
         input = 10 * np.ones((1000000))
     #Creating the ESN
-    test= Spatial_ESN(number_neurons = number_neurons, sparsity = sparsity,intern_sparsity = intern_sparsity, number_input = 1, number_output = 1, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = noise)
+    test= Spatial_ESN(number_neurons = number_neurons, external_sparsity = external_sparsity,intern_sparsity = intern_sparsity, number_input = 1, number_output = 1, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = noise)
     test.W_back *= 0
     test.x["activity"]*=0
     #test.W_in = (test.W_in != 0)

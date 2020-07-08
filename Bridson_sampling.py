@@ -81,13 +81,19 @@ def Bridson_sampling(width=1.0, height=1.0, radius=0.025, k=30):
 
 if __name__ == '__main__':
 
-    plt.figure()
-    plt.subplot(1, 1, 1, aspect=1)
+    #plt.figure()
+    #plt.subplot(1, 1, 1, aspect=1)
+    width = 1
+    height = 0.5
+    n = 800
 
-    points = Bridson_sampling()
+    radius =  np.sqrt((width * height)/(n*np.sqrt(3)))
+    points = Bridson_sampling(width = width,height = height, radius = radius)
+    print(len(points))
+    '''
     X = [x for (x, y) in points]
     Y = [y for (x, y) in points]
     plt.scatter(X, Y, s=10)
     plt.xlim(0, 1)
     plt.ylim(0, 1)
-    plt.show()
+    #plt.show()'''

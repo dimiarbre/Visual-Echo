@@ -7,7 +7,7 @@ len_training = 1000
 len_warmup = 100
 epsilon = 1e-8
 number_neurons = 30*30
-sparsity = 0.5
+sparsity = 0.6
 spectral_radius = 1.25
 
 np.random.seed(1)
@@ -129,7 +129,8 @@ class ESN:
         if reset:
             self.reset_reservoir()  #initial reset for multiple calls
             self.warmup(inputs[:len_warmup])
-            self.train(inputs[len_warmup:len_warmup+len_training],expected[len_warmup:len_warmup+len_training])
+            #self.train(inputs[len_warmup:len_warmup+len_training],expected[len_warmup:len_warmup+len_training])
+            self.train(inputs[len_warmup:len_warmup+len_training],expected[len_warmup -1 :len_warmup -1 +len_training])
 
         print("---Begining simulation without input---")
         predictions = []
@@ -191,6 +192,7 @@ def compare_MG(esn,nb_iter = -1,display = True, savename = ""):
         esn.begin_record()
     if nb_iter ==-1:
         nb_iter = len(mackey_glass) - len_warmup - len_training
+
     simu = esn.simulation(nb_iter = nb_iter, inputs = mackey_glass,expected = mackey_glass, len_warmup = len_warmup, len_training = len_training, reset = True )
     if display:
         esn.end_record(savename,isDisplayed = True)
