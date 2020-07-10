@@ -1,0 +1,24 @@
+{
+ "seed": 21,
+ "label_input": "Mackey Glass",
+ "display_animation": true,
+ "display_connectivity": false,
+ "savename": "Normalized_display",
+ "number_neurons": 400,
+ "len_warmup": 200,
+ "len_training": 1000,
+ "simulation_len": 1000,
+ "delays": [
+  0
+ ],
+ "external_sparsity": 0.3,
+ "intern_sparsity": 0.1,
+ "spectral_radius": 1,
+ "leak_rate": 0.7,
+ "epsilon": 1e-08,
+ "bin_size": 0.05,
+ "noise": 0.005,
+ "timestamp": "Fri Jul 10 15:26:58 2020",
+ "git_branch": "master",
+ "git_hash": "0d64b86ab6946fba043218711b2b23da225f0aaa"
+}
