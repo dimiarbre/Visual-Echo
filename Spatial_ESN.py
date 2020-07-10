@@ -207,8 +207,8 @@ class Spatial_ESN:
             input = np.zeros((self.number_input))
         else:
             input = np.array(input)
-        u = np.concatenate(([1.0] , input))             #We add the bias.
-        matrixA = np.dot(self.W_in, u + addNoise * self.generateNoise())    #We put noise in the input if we are training.
+        u = np.concatenate((np.array([1.0]) , input + addNoise * self.generateNoise()))             #We add the bias.
+        matrixA = np.dot(self.W_in, u)    #We put noise in the input if we are training.
         matrixB = np.dot(self.W , self.x["activity"])
         matrixC = 0 #self.W_back @ self.y #Feature deactivated and not tested in this particular case.
         self.x["activity"] = (1-self.leak_rate) * self.x["activity"] + self.leak_rate * tanh(matrixA + matrixB + matrixC )
@@ -287,6 +287,7 @@ class Spatial_ESN:
         self.record_state()
 
     def end_record(self,name, bin_len = 0.1, isDisplayed = False):
+
         figure, axes = plt.subplots(nrows = 2,ncols = 1,sharex = True, frameon=False)
         title = figure.suptitle("Warmup: Step n°0")
 
@@ -311,11 +312,28 @@ class Spatial_ESN:
 
         #We add 4 dummy points for display (see https://stackoverflow.com/questions/20515554/colorize-voronoi-diagram)
         vor = Voronoi(np.concatenate((self.x["position"],np.array([[999,999],[-999,999],[999,-999],[-999,-999]]))))
-        voronoi_plot_2d(vor,axes[0],show_points=True, show_vertices=False, s=1)
+        voronoi_plot_2d(vor,axes[0],show_points=False, show_vertices=False, s=1)
 
-        norm = mpl.colors.Normalize(vmin = -1, vmax = 1)
-        mapper = cm.ScalarMappable(norm = norm, cmap = cm.coolwarm)  #The Voronoi colormap
+        self.historic = np.array(self.historic)
+        nb_states,nb_neurons = self.historic.shape
+        colors_array = np.zeros((nb_states,nb_neurons,4))
 
+        print("---Computing colors---")
+        for i in range(self.N):
+            max = np.max(np.abs(self.historic[:,i]))
+            norm = mpl.colors.Normalize(vmin =  -max , vmax = max)  #Each neuron is normalized according to its
+            mapper = cm.ScalarMappable(norm = norm, cmap = cm.coolwarm)  #The Voronoi colormap
+            colors_array[:,i] = mapper.to_rgba(self.historic[:,i])
+            '''
+            for j in range(nb_states):  #The color of the neuron will depend on the mean of the last values.
+                if j<50:
+                    index_min = 0
+                else:
+                    index_min = j-50        #We take into account the last 50 values.
+                array = self.historic[index_min:j+1,i]
+                activity_to_disp = np.mean(array)
+                colors_array[j,i] = mapper.to_rgba(activity_to_disp)'''
+        print("---Done---")
         #list_fills = []
         polygons = []
         facecolors = []
@@ -331,12 +349,16 @@ class Spatial_ESN:
         axes[0].set_ylim(0,self.ymax)
         axes[0].set_xlim(0,1)
 
-
+        axes[0].set_aspect(1)
         polycollection = mpl.collections.PolyCollection(polygons)
         #colors_array = mapper.to_rgba(np.copy(self.historic))   #Maps the color of each past activity to display.
-        colors_array = mapper.to_rgba(np.copy(self.historic * (1+ 2*self.x["position"][:,0])) )   #Maps the color of each past activity to display while amplifying the behaviour for neurons furthers in the reservoir.
+        #colors_array = mapper.to_rgba(self.historic * (1+ 2*self.x["position"][:,0]))   #Maps the color of each past activity to display while amplifying the behaviour for neurons furthers in the reservoir.
         polycollection.set_facecolors(colors_array[0])
+        polycollection.set_edgecolors("white")
         axes[0].add_collection(polycollection)
+        figure.tight_layout(pad=3.0)
+
+
         def update_frame(i):
 
             #Update of the neurons display
@@ -357,7 +379,7 @@ class Spatial_ESN:
                 #print(newcolor)
                 .set_fc(newcolor)
                 count += 1'''
-        #    print(fill[0].get_facecolor())
+            #print(fill[0].get_facecolor())
             #return bar, list_fills
 
         anim = animation.FuncAnimation(figure, update_frame,frames = np.arange(1,len(self.historic)),interval = 10)
@@ -379,7 +401,8 @@ class Spatial_ESN:
 
     def disp_connectivity(self):
         '''
-        Displays the connections inside the reservoir, majoritarly to see what happens during spatialization. If i is given, it will simply display the connection from i to others neurons
+        Displays the connections inside the reservoir, majoritarly to see what happens during spatialization.
+        The plot is interactive.
         '''
 
         connection_in = (self.W_in != 0)
@@ -436,16 +459,20 @@ class Spatial_ESN:
         #And we remove them, to be able to draw them again if necessary
         arrowDisplayed = [True]
         print("---Done---")
+
         def onClick(event):
             '''
-            When the mouse is clicked, change the focus on the nearest neuron, and display its past activity.
+            When the mouse is clicked, change the focus on the nearest neuron, and display its past activity in the lower plot.
             '''
-            index = self.get_nearest_index(event.xdata,event.ydata)
+            index = self.get_nearest_index(event.xdata,event.ydata) #Gets the index of the clicked neuron
             print("Clicked on neuron {}, with position {}".format(index,self.x["position"][index]))
+
+            #To better visualize the connections of the selected neuron
             previous = []
             next = []
             unrelated = []
             for j in range(self.N):
+                #We check the relation with the others neurons
                 if j != index:
                     if self.W[j,index] != 0:
                         next.append(j)
@@ -453,6 +480,7 @@ class Spatial_ESN:
                         previous.append(j)
                     else:
                         unrelated.append(j)
+
             unrelatedNeurons.set_offsets(self.x["position"][unrelated])
             previousNeurons.set_offsets(self.x["position"][previous])
             nextNeurons.set_offsets(self.x["position"][next])
@@ -474,7 +502,7 @@ class Spatial_ESN:
 
         def onPress(event):
             '''
-            Displays the connection arrows when the key space is pressed, and move them back when it is pressed again
+            Displays the connection arrows when the key space is pressed, and remove them when it is pressed again
             '''
             if event.key == " ":
                 if arrowDisplayed[0]:
@@ -482,11 +510,11 @@ class Spatial_ESN:
                         arrow[0].set_visible(False)
                 else:
                     for arrow in arrows:
-                        #print(arrows)
                         arrow[0].set_visible(True)
                 arrowDisplayed[0] = not(arrowDisplayed[0])
                 figure.canvas.draw()
-            elif event.key == "escape":
+
+            elif event.key == "escape": #To loose focus on the neuron => set the plot back to its original state
                 unrelatedNeurons.set_offsets(self.x["position"][unrelated])
                 previousNeurons.set_offsets(self.x["position"][connection_input])
                 nextNeurons.set_offsets(self.x["position"][connection_output])
@@ -648,6 +676,7 @@ def generate_basic_ESN(number_neurons, sparsity, number_input, number_output, sp
         spatial_esn.W *= spectral_radius/current_radius            #We normalize the weight matrix to get the desired spectral radius.
 
     return spatial_esn
+
 #----------------------------------------------------------------------------------------------------------------------
 #File and json handling
 
