@@ -734,6 +734,8 @@ if __name__  == "__main__":
     locals().update(data)
     save("temp.txt")
 
+    if savename != "":
+        save(savename+".txt")
     #Beginning of execution
     np.random.seed(seed)
 
