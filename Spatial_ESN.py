@@ -18,7 +18,7 @@ _data = {
     "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
     "display_animation" : True,
     "display_connectivity" : True,     # If the internal structure is displayed. Allows better understanding and checking.
-    "savename" : "",             #The file where the animation is saved
+    "savename" : "mean_values_20",             #The file where the animation is saved
     "number_neurons" : 20**2,
     "len_warmup" : 200,                #100,
     "len_training" : 1000,             #1000,
@@ -293,13 +293,8 @@ class Spatial_ESN:
 
         bins = np.arange(0, 1 + bin_len, bin_len)
         bin_position = np.array([(self.x["position"][:,0] >= bins[i]) * (self.x["position"][:,0] < bins[i+1]) for i in range(len(bins)-1)])
-        #Initialisation of the scatterplot
-        #scat = axes[0].scatter(x = self.x["position"][:,0],y = self.x["position"][:,1], c = self.x["activity"], vmin = -1 , vmax = 1)
-        #scat.set_sizes(10 * np.ones(self.N))
-
 
         axes[0].set_title("Neurons position and activity")
-        #plt.colorbar(scat)
 
         #Draws the vertical liines.
         for x_value in bins[1:]:
@@ -318,12 +313,23 @@ class Spatial_ESN:
         nb_states,nb_neurons = self.historic.shape
         colors_array = np.zeros((nb_states,nb_neurons,4))
 
+        #Creates mean array:
+        len_mean = 20
+        mean_array = np.zeros((nb_states+len_mean,nb_neurons))
+        for j in range(len_mean):
+            mean_array += np.concatenate((np.zeros((j,nb_neurons)),self.historic,np.zeros((len_mean-j,nb_neurons))))
+        mean_array *= 1/len_mean
+
         print("---Computing colors---")
         for i in range(self.N):
             max = np.max(np.abs(self.historic[:,i]))
-            norm = mpl.colors.Normalize(vmin =  -max , vmax = max)  #Each neuron is normalized according to its
+            #norm = mpl.colors.Normalize(vmin =  -1 , vmax = 1)  #Each neuron is normalized according to its
+            norm = mpl.colors.Normalize(vmin =  -max , vmax = max)  #Each neuron is normalized according to its maximum value,centered on 0.
+
             mapper = cm.ScalarMappable(norm = norm, cmap = cm.coolwarm)  #The Voronoi colormap
-            colors_array[:,i] = mapper.to_rgba(self.historic[:,i])
+            #colors_array[:,i] = mapper.to_rgba(self.historic[:,i])
+            colors_array[:,i] = mapper.to_rgba(mean_array[:-len_mean,i])
+
             '''
             for j in range(nb_states):  #The color of the neuron will depend on the mean of the last values.
                 if j<50:
@@ -371,7 +377,7 @@ class Spatial_ESN:
             for rect,h in zip(bar,value):
                 rect.set_height(h)
 
-            polycollection.set_fc(colors_array[i])
+            polycollection.set_facecolors(colors_array[i])
             '''
             count = 0
             for fill in list_fills:
