@@ -1,0 +1,111 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{grffile}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{textcomp}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{url}
+\usepackage{geometry}
+\geometry{hmargin=2cm,vmargin=2cm}
+
+
+\author{LEREVEREND Dimitri}
+\date {2019 - 2020}
+\title{INTERNSHIP REPORT - Visual Echo}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+  This internship aims to take paradigms of reservoir computing, in this case the Echo States Networks(ESN), and to spatialize them in a way to keep their learning capabilities. This should allow to have a way to visualize the inner working of such neural networks, as well as properties following the way the cortex works. The overall goal is to see if by adding such features, it will be possible to achieve a better learning for the Network, and otherwise to compare how it influences its evolution.
+\end{abstract}
+
+\section{Introduction}
+  A very interesting properties for neural network is memory, since it is useful in many situations. Regular, feed-forward networks aren't able to remember the previous data for exemple, except if you give it the previous data as an input. But this can lead networks size to increase exponentially. This is why other types of network can be necessary.
+
+  \subsection{The Echo State Network}
+     Echo States Networks are partly based on how the brain works. They are easier to set up than regular feed-forward neural networks, since most of their coefficients are not changed during the training. They consist of three parts:
+     \begin{itemize}
+       \item [.] The inputs. It is generally a temporal series. In this internship, and for all the following graphs, it is the Mackey-Glass series or the simpler sinusoid.
+       \item [.] The reservoir. It is where the information is stored, akin to a memory unit. It consists of neurons, connected between them randomly and uniformly. They will exchange information, and should
+       \item [.] The ouput. It is simply what we want to obtain from the input series.
+     \end{itemize}
+
+     During this internship, the focus was mainly on 1 dimensional input (for display purposes), and the goal was for the network to reproduce the signal without any input given. Thus the output is also the input.
+
+   \subsection{A temporal evolution}
+     In order to understand how the Network learns, let us consider a more mathematical approach. We must first define several things: let $N$ be the number of neurons in the reservoir, $K$ the number of inputs and $L$ the number of output. The reservoir consists of 3 matrixes: \begin{itemize}
+       \item [.] $W_{in}$, the input matrix. It is of size $N \times K$.
+       \item [.] $W$, the reservoir matrix, of size $N \times N$. It is akin to a graph of $N$ nodes, and defines how the neurons exchange information. $X$ is the vector of the activity of thoses nodes.
+       \item [.] $W_{out}$, the output matrix. Its size is $L \times N$. $Y$ is the vector of the activity of the output neurons, ie the output of the network.
+     \end{itemize}
+     Originally, and as described in the document \textbf{INSERT REF HERE, ADD SCHEMA OF INNER WORKING}, there should also be a matrix for the feedback (ie from the output neurons to the reservoir). However, a sligthly different approach was used in this internship. Additionally, as 1 dimensionnal time series were used with the goal to predict its evolution, we have $K = L = 1$.
+
+     Consider the network in a certain state at step $n$. The temporal evolution of the reservoir is then done as follow: given an input $I(n+1)$ (a vector of size $L$), the reservoir is updated thanks to $X(n+1) = (1-\delta)X(n) + \delta \times f( W_{in}I(n+1) + WX(n))$, with $\delta$ the \textbf{leak rate} and $f$ a normalization function, usually a sigmoid (the hyperbolic tangent in this case). This is called the leaky integrator neurons, since each neuron keep a part of the information of its previous state.
+
+     The output states are computed by only taking into account the state of the reservoir: $Y(n+1) = W_{out}X(n+1)$. No additionnal function was used on the output in order to make the learning easier.
+
+     This process is then repeted as long as there is an input.
+
+  \subsection{The Echo state property}
+     In order for this structure to work, the first priority is to control how the reservoir evolve, since it is the working memory. Without any form of control, the states of the reservoir could
+
+  \subsection{The training}
+    The training of the network only changes $W_{out}$. Given $(I(n))_{n\in \mathbb{N}}$ an input series, we run a \textbf{warmup} sequence, by feeding as input $I(n)$. It usually consist of about 100 iterations. The goal is to set the internal state, in order to avoid taking into account the random values the reservoir will have at first in the training.
+
+    After this warmup, the ESN will begin the \textbf{training} phase: it will still evolve the same way, by feeding it $I(n)$, but will remember the state $X(n)$ of the reservoir. When it reach the end of the diration of the training (generally 1000 iteration, but this number can change with the input series, the awaited precision...), the matrix $W_{out}$ will be determined by a linear regression between the states $X(n)$ and the expected results for $Y(n)$.
+
+    At this point, the network is trained, and will evolve by its own. In this case of $L=K$, the input becomes the output of the network: $I(n+1) = Y(n)$
+
+
+  \subsection{Mackey-Glass}
+    For this work, most networks were trained to predict the Mackey-Glass series. It has good properties as it is a pseudo-chaotic series. Moreover, it can be visualized simply sinced it is a 1-dimensionnal series. The goal of the network was to, after a warmup and a training, be able to predict the behaviour of the series over a certain number of epochs.
+
+   \subsection{The first results}
+      Such a network was programmed and applied to the Mackey-Glass Series, in order to have a working ESN that will be used as a template for the following part of the internship. \textbf{INSERT IMAGE AND REF}. We can see that there is a loss of information the more time the network evolves on its own, since the errors tends to be amplified with time.
+
+\section{Visual Echo}
+  \subsection{Spatial ESN}
+    An analogy between the reservoir and graphes can be easily found. But it can be further developped, by giving to the neurons a position in the Euclidian plane. This will also provide a link with the inner working of the brain: the neurons aren't connected randomly, they follow a structure. In our case, only spatial conditions will let the neurons connect to each other. Otherwise, the way the ESN evolve is not changed. \textbf{ADD BLUE NOISE}
+
+    This allows a simpler and more intuitive visualization of the propagation of information.
+
+  \subsection{Blue noise}
+      In order to visualize better, the neurons weren't placed completely randomly. Their positions were determined throught Blue Noise, a concept used a lot in computer graphics. \textbf{INSERT REF} This allows us to have a random set of points, but avoids the possible clusters that a simple uniform set could provide in some cases. The algorithm used was the one described in \textbf{INSERT REF}, which allow eachpoint to be a certain distance apart from each other. Each point is the position of a neuron. But this algorithm does not specify the number of point to place: it tries to fill the space as much as possible arround each point (especially when k is big). In order to determine the radius to specify, the formula for the maximal density for packing circles \textbf{INSERT REF} was used: $d = \frac{\pi \sqrt{3}}{6} = \frac{A_{occupied}}{A_{total}}$, $A$ being the area. Given a rectangle of size $w * h$, we have $d = \frac{2* \pi * r^2 * N}{w * h}$, with $N$ the number of circles, $r$ their radius. This formula is an approximation, because the totality of the circles did not completely belong to the rectangle : the center of a circle could be on the border, and only a part of its area should be considered. But it was an approximation. By replacing the value of $d$ and isolating $r$, we obtain $r_{opti} = \sqrt{ \frac{w * h}{2 * N * \sqrt{3} } }$.
+      Giving this parameter to the algorithm allowed to obtain a number of points close to the desired number $N$.
+
+      In this case, the space was defined as a rectangle of lenght $1$ and height $0.5$. An idea could be to study the influence of the size of the rectangle, but it was not done because of missing time. This is a typical scaterplot obtained : \textbf{INSERT PLOT BLUE NOISE / RANDOM SCATTER}
+
+  \subsection{The implementation}
+    Such a method to generate a set of points was used in a rectangle of height $0.5$ and width $1$. This was the position of the different neurons. Then the connections between neurons were set as follows: if the $x$ position of neuron A is lower than the $x$ position of neuron B, then a random number is generated uniformly in $[0,intern\_sparsity]$, with $intern\_sparsity$ an hyperparameter describing the maximum length of a connection between two neurons. If the distance between neurons A and B is less than this randomly generated number, then a connection is created, with a weigth taken uniformly from $[-1,1]$. Numpy can be used for this step go generate the matrix quickly by multiplying with boolean arrays. This leads to a $W$ matrix of the reservoir of size $N\times N$ that will be used as it is in a classical ESN. The goal is to have only forward connexions in the reservoir, with neurons near each other connected to one another.
+
+    The process was the same for the connection to the input or output, but the distance was defined by the x-axis. The input was symbolized to be on the left part of the reservoir, while the output is on the right part. For a given neuron, it is connected to the input (respectively output) if an uniform number is taken from $[0,sparsity]$ is lower than $x$ (respectively $width-x$, with $width = 1$ in this case). This allows only neurons near the input or output to be connected, and the connection rate is controled via the $sparsity$ hyperparameter.
+
+    This altogether leads to a network connected as depicted in \textbf{INSERT PLOT NETWORK WITH CONNECTIONS}.
+
+
+
+  \subsection{Difficulties}
+    \paragraph{Echo State property}
+      The advantage of an ESN is that a form of control is given by the echo state property. Usually, the matrix is generated randomly, and then multiplied by the ratio between the desired spectral radius and its greatest absolute eigenvalue. However, by only connecting neurons forward, we lose this property. If we sort the lines of the $W$ matrix according to the order of the $x$ value of the neurons, we obtain a triangular matrix. Thus, the only eigenvalue is $0$, which mean we cannot use this ratio. This can be a source of uncertainty, and the reason why there are cases of the reservoir being unstable.
+
+    \paragraph{Delays in training}
+
+
+  \subsection{Observations}
+    Importance of leak rate: prevent the reservoir from exploding. A lower leak rate will make the neurons less variable, thus increases the stability for slow varying signals.
+
+    Lower number of neurons needed.
+
+    Importance of noise in learning.
+
+\end{document}
