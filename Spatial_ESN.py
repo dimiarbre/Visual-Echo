@@ -3,6 +3,7 @@ import random
 import matplotlib as mpl
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import matplotlib.animation as animation
 import scipy.spatial.distance as distance
 from scipy.spatial import Voronoi,voronoi_plot_2d
@@ -15,23 +16,23 @@ import Bridson_sampling
 # Default parameters
 _data = {
     "seed"           : 21,
-    "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
-    "display_animation" : True,
+    "label_input" : "Sinus",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
+    "display_animation" : False,
     "display_connectivity" : True,     # If the internal structure is displayed. Allows better understanding and checking.
-    "savename" : "mean_values_20",             #The file where the animation is saved
-    "number_neurons" : 20**2,
-    "len_warmup" : 200,                #100,
+    "savename" : "",             #The file where the animation is saved
+    "number_neurons" : 100,
+    "len_warmup" : 100,                #100,
     "len_training" : 1000,             #1000,
     "simulation_len" : 1000,
     "delays" : [i for i in range(100)],
     "delays" : [0],
     "external_sparsity" : 0.3,          #The probability of connection to the input/output (distance-based)
-    "intern_sparsity" : 0.1,   #The probability of connection inside of the reservoir.
-    "spectral_radius" : 1,
-    "leak_rate" : 0.7,         #The greater it is, the more a neuron will lose its previous activity
+    "intern_sparsity" : 0.5,   #The probability of connection inside of the reservoir.
+    "spectral_radius" : 0.2,
+    "leak_rate" : 0.5,         #The greater it is, the more a neuron will lose its previous activity
     "epsilon" : 1e-8,
     "bin_size" : 0.05,
-    "noise" : 0.005,
+    "noise" : 0.001,
     "timestamp"      : "",
     "git_branch"     : "",
     "git_hash"       : "",
@@ -63,18 +64,6 @@ def generation_Bridson(number_points, k = 30, xmax = 1, ymax = 0.5):
     :output:
         A numpy array of dimension (number_points,2) containing the points randomly generated
     '''
-    density = np.pi * np.sqrt(3) /6 #Optimal density of packing circles in space
-
-    #Trial for increased rectangle size
-    #delta = (density * (xmax + ymax))**2 - 4*(density-np.pi*number_points)*xmax*ymax*density
-    #assert delta >=0, "Invalid solution for radius"
-    #radius = max((density * (xmax + ymax) + np.sqrt(delta)) / (2*(density - np.pi * number_points)),(density * (xmax + ymax) - np.sqrt(delta)) / (2*(density - np.pi * number_points)))
-    #print(radius)
-
-    #Former and first result
-    #optimal_radius = np.sqrt(np.sqrt(3) *xmax * ymax/ (6 * number_points))
-
-
     optimal_radius =  np.sqrt((xmax * ymax)/(number_points*np.sqrt(3)))
     return Bridson_sampling.Bridson_sampling(width = xmax, height = ymax, radius = optimal_radius, k = k)
 
@@ -155,7 +144,7 @@ class Spatial_ESN:
             self.W = np.random.uniform(-1,1,(self.N,self.N))  #The internal weight matrix
             distances = distance.cdist(self.x["position"],self.x["position"]) #Computes the distances between each nodes, used for the probability of connection.
             deltax = np.tile(self.x["position"][:,0],(self.N,1))
-            deltax = (deltax.T - deltax)
+            deltax = (deltax.T - deltax)                                       #Checks if the x-distance is positive between 2 neurons
 
         #    self.W *= np.random.uniform(-1,1,self.W.shape) < self.external_sparsity * (1- np.eye(self.N))
             intern_connections = distances < np.random.uniform(0,self.intern_sparsity,(distances.shape))
@@ -287,10 +276,11 @@ class Spatial_ESN:
         self.record_state()
 
     def end_record(self,name, bin_len = 0.1, isDisplayed = False):
-
-        figure, axes = plt.subplots(nrows = 2,ncols = 1,sharex = True, frameon=False)
+        figure = plt.figure(figsize = (5,7))
+    #    figure, axes = plt.subplots(nrows = 2,ncols = 1,sharex = True, frameon=False)
         title = figure.suptitle("Warmup: Step n°0")
-
+        gs = gridspec.GridSpec(2, 1, height_ratios=[2,1])
+        axes = [plt.subplot(gs[0]), plt.subplot(gs[1])]
         bins = np.arange(0, 1 + bin_len, bin_len)
         bin_position = np.array([(self.x["position"][:,0] >= bins[i]) * (self.x["position"][:,0] < bins[i+1]) for i in range(len(bins)-1)])
 
@@ -330,15 +320,6 @@ class Spatial_ESN:
             #colors_array[:,i] = mapper.to_rgba(self.historic[:,i])
             colors_array[:,i] = mapper.to_rgba(mean_array[:-len_mean,i])
 
-            '''
-            for j in range(nb_states):  #The color of the neuron will depend on the mean of the last values.
-                if j<50:
-                    index_min = 0
-                else:
-                    index_min = j-50        #We take into account the last 50 values.
-                array = self.historic[index_min:j+1,i]
-                activity_to_disp = np.mean(array)
-                colors_array[j,i] = mapper.to_rgba(activity_to_disp)'''
         print("---Done---")
         #list_fills = []
         polygons = []
@@ -461,8 +442,6 @@ class Spatial_ESN:
                     arrow = axes[0].plot([self.x["position"][i,0],self.x["position"][j,0]], [self.x["position"][i,1], self.x["position"][j,1]],c = 'b',lw = 0.1)
                     arrows.append(arrow)
 
-
-        #And we remove them, to be able to draw them again if necessary
         arrowDisplayed = [True]
         print("---Done---")
 
@@ -509,6 +488,7 @@ class Spatial_ESN:
         def onPress(event):
             '''
             Displays the connection arrows when the key space is pressed, and remove them when it is pressed again
+            When escape key is pressed, reset the display to see the neurons connected to the input/output.
             '''
             if event.key == " ":
                 if arrowDisplayed[0]:
@@ -543,6 +523,7 @@ class Spatial_ESN:
         buffer = Spatial_ESN(number_neurons = self.N, external_sparsity = self.external_sparsity,intern_sparsity = self.intern_sparsity, \
             number_input = self.number_input,number_output = self.number_output,\
             spectral_radius = self.spectral_radius,leak_rate = self.leak_rate,noise = self.noise,isCopy = True)
+        buffer.N = self.N
         buffer.W = np.copy(self.W)
         buffer.W_in = np.copy(self.W_in)
         buffer.W_out = np.copy(self.W_out)
@@ -668,21 +649,62 @@ def generate_basic_ESN(number_neurons, sparsity, number_input, number_output, sp
     '''
     Creates a basic ESN, but using the spatial ESN. The idea is to be able to compare the results.
     '''
-    spatial_esn = Spatial_ESN(number_neurons = number_neurons, external_sparsity = 1,intern_sparsity = sparsity, number_input = number_input, \
+    buffer = Spatial_ESN(number_neurons = number_neurons, external_sparsity = 1,intern_sparsity = sparsity, number_input = number_input, \
                     number_output = number_output, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = noise)
 
     #We must regenerate the W matrix, since it is generated with space contraints otherwise.
-    spatial_esn.W = np.random.uniform(-1,1,spatial_esn.W.shape)
-    intern_connections = np.random.uniform(0,1,spatial_esn.W.shape) < sparsity
-    spatial_esn.W *= intern_connections
-    current_radius = np.max(np.abs(np.linalg.eigvals(spatial_esn.W)))
+    buffer.N = number_neurons
+    buffer.W = np.random.uniform(-1,1,(number_neurons,number_neurons))
+    intern_connections = (np.random.uniform(0,1,buffer.W.shape) < sparsity)
+    buffer.W *= intern_connections
+
+    current_radius = np.max(np.abs(np.linalg.eigvals(buffer.W)))
     if current_radius == 0.0:
         raise Exception("Null Spectral radius for generated matrix")
     else:
-        spatial_esn.W *= spectral_radius/current_radius            #We normalize the weight matrix to get the desired spectral radius.
+        buffer.W *= spectral_radius/current_radius            #We normalize the weight matrix to get the desired spectral radius.
+    buffer.W_in = 0.5 * np.random.uniform(-1,1,(number_neurons, 1 + number_input))    #We initialise between -1 and 1 uniformly, maybe to change
+    buffer.W_out = 0.5 * np.random.uniform(-1,1,(number_output, number_neurons))
+    buffer.connection_out = np.ones(buffer.W_out.shape)
+    buffer.x = np.zeros((number_neurons),dtype = [("activity",float),("position",float,(2,)),("mean",float)])
+    buffer.x["activity"] = np.random.uniform(-1,1,(number_neurons,))   #Internal state of the reservoir. Initialisation might change
 
-    return spatial_esn
+    buffer.x["mean"] = np.copy(buffer.x["activity"])
+    return buffer
 
+def disp_sorted_matrix(esn):
+    '''
+    Takes an esn and displays its W matrix sorted by ascending x.
+    '''
+    W = np.copy(esn.W)
+    posx = esn.x["position"][:,0]
+    matrix = np.zeros((esn.N),dtype = [("x",float),("connection",float,(esn.N,))])
+    print(matrix[:]["x"].shape,posx.shape)
+    for neuron in range (esn.N):
+        matrix[neuron]["x"] = posx[neuron]
+        matrix[neuron]["connection"] = W[neuron]    #Connection will describe the previous neurons, connected to this one
+
+    matrix.sort(axis = 0,order = "x")
+    for neuron in range(esn.N):
+        W[neuron] = np.copy(matrix[neuron]["connection"])
+
+    for neuron1 in range(esn.N):
+        for neuron2 in range(neuron1+1,esn.N):
+            if matrix[neuron1]["x"]>matrix[neuron2]["x"]:
+                print("Backward connexion",neuron1,";",neuron2,";",posx[neuron1],";", posx[neuron2])
+    is_connected = (W != 0)
+    deltax = np.tile(matrix["x"],(esn.N,1))
+    deltax = (deltax.T - deltax)
+    print("Test display",np.sum((deltax.T * is_connected) <0))
+    ind = np.unravel_index(np.argmin(deltax*is_connected, axis=None), deltax.shape) #Gets the index of the minimum of the distances array
+    if (deltax*is_connected)[ind] <0:
+        print("Negative distance connections, index {}, deltax = {}".format(ind,deltax[ind]))
+    fig = plt.figure()
+    ax = plt.subplot(1,1,1, aspect=1, frameon=False)
+    image = ax.imshow(W,cmap = cm.coolwarm ,vmin = np.min(W), vmax = np.max(W))
+    ax.plot([0,esn.N],[0,esn.N])
+    fig.suptitle("Matrix of size {}x{}\n{} effective connections\nLines of W are sorted according to ascending x".format(esn.N,esn.N,np.sum(is_connected)))
+    plt.show()
 #----------------------------------------------------------------------------------------------------------------------
 #File and json handling
 
@@ -748,12 +770,26 @@ if __name__  == "__main__":
     elif label_input == "Constant":
         input = 10 * np.ones((1000000))
     #Creating the ESN
-    test= Spatial_ESN(number_neurons = number_neurons, external_sparsity = external_sparsity,intern_sparsity = intern_sparsity, number_input = 1, number_output = 1, spectral_radius = spectral_radius, leak_rate = leak_rate, noise = noise)
-    test.W_back *= 0
-    test.x["activity"]*=0
+    spatial_esn = Spatial_ESN(number_neurons = number_neurons, external_sparsity = external_sparsity,\
+                      intern_sparsity = intern_sparsity, number_input = 1, number_output = 1,\
+                      spectral_radius = spectral_radius, leak_rate = leak_rate, noise = noise)
+    regular_esn = generate_basic_ESN(number_neurons = number_neurons,\
+                      sparsity = intern_sparsity, number_input = 1, number_output = 1,\
+                      spectral_radius = spectral_radius, leak_rate = leak_rate, noise = noise)
+
+    spatial_esn.W_back *= 0
+    spatial_esn.x["activity"]*=0
     #test.W_in = (test.W_in != 0)
     #test.W = (test.W != 0)
-    print("Effective spectral radius :",max(abs(np.linalg.eig(test.W)[0]))) #Check wether the spectral radius is respected.
+    print("Effective spectral radius :",max(abs(np.linalg.eig(spatial_esn.W)[0]))) #Check wether the spectral radius is respected.
+    disp_sorted_matrix(spatial_esn)
 
-    compare_prediction(test,input = input,len_warmup = len_warmup, len_training = len_training, delays = delays, nb_iter = simulation_len,display_anim = display_animation,\
+    compare_prediction(spatial_esn,input = input,len_warmup = len_warmup, len_training = len_training, delays = delays, nb_iter = simulation_len,display_anim = display_animation,\
         display_connectivity = display_connectivity ,bin_size = bin_size,savename = savename,label_input = label_input + " series")
+    '''
+    compare_prediction(regular_esn,input = input,len_warmup = len_warmup, len_training = len_training, delays = delays, nb_iter = simulation_len,display_anim = False,\
+    display_connectivity = False ,bin_size = bin_size,savename = "",label_input = label_input + " series")
+    '''
+    connection_in_spatial = (spatial_esn.W != 0)
+    connection_in_basic = (regular_esn.W != 0)
+    print("Nb of connections in the spatial ESN: {} \nNb of connections in the regular ESN: {}".format(np.sum(connection_in_spatial),np.sum(connection_in_basic)))

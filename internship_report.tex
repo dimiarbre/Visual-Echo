@@ -18,7 +18,6 @@
 \usepackage{geometry}
 \geometry{hmargin=2cm,vmargin=2cm}
 
-
 \author{LEREVEREND Dimitri}
 \date {2019 - 2020}
 \title{INTERNSHIP REPORT - Visual Echo}
@@ -80,7 +79,7 @@
     This allows a simpler and more intuitive visualization of the propagation of information.
 
   \subsection{Blue noise}
-      In order to visualize better, the neurons weren't placed completely randomly. Their positions were determined throught Blue Noise, a concept used a lot in computer graphics. \textbf{INSERT REF} This allows us to have a random set of points, but avoids the possible clusters that a simple uniform set could provide in some cases. The algorithm used was the one described in \textbf{INSERT REF}, which allow eachpoint to be a certain distance apart from each other. Each point is the position of a neuron. But this algorithm does not specify the number of point to place: it tries to fill the space as much as possible arround each point (especially when k is big). In order to determine the radius to specify, the formula for the maximal density for packing circles \textbf{INSERT REF} was used: $d = \frac{\pi \sqrt{3}}{6} = \frac{A_{occupied}}{A_{total}}$, $A$ being the area. Given a rectangle of size $w * h$, we have $d = \frac{2* \pi * r^2 * N}{w * h}$, with $N$ the number of circles, $r$ their radius. This formula is an approximation, because the totality of the circles did not completely belong to the rectangle : the center of a circle could be on the border, and only a part of its area should be considered. But it was an approximation. By replacing the value of $d$ and isolating $r$, we obtain $r_{opti} = \sqrt{ \frac{w * h}{2 * N * \sqrt{3} } }$.
+      In order to visualize better, the neurons weren't placed completely randomly. Their positions were determined throught Blue Noise, a concept used a lot in computer graphics. \textbf{INSERT REF} \cite{Rougier2018} This allows us to have a random set of points, but avoids the possible clusters that a simple uniform set could provide in some cases. The algorithm used was the one described in \textbf{INSERT REF}, which allow eachpoint to be a certain distance apart from each other. Each point is the position of a neuron. But this algorithm does not specify the number of point to place: it tries to fill the space as much as possible arround each point (especially when k is big). In order to determine the radius to specify, the formula for the maximal density for packing circles \textbf{INSERT REF} was used: $d = \frac{\pi \sqrt{3}}{6} = \frac{A_{occupied}}{A_{total}}$, $A$ being the area. Given a rectangle of size $w * h$, we have $d = \frac{2* \pi * r^2 * N}{w * h}$, with $N$ the number of circles, $r$ their radius. This formula is an approximation, because the totality of the circles did not completely belong to the rectangle : the center of a circle could be on the border, and only a part of its area should be considered. But it was an approximation. By replacing the value of $d$ and isolating $r$, we obtain $r_{opti} = \sqrt{ \frac{w * h}{2 * N * \sqrt{3} } }$.
       Giving this parameter to the algorithm allowed to obtain a number of points close to the desired number $N$.
 
       In this case, the space was defined as a rectangle of lenght $1$ and height $0.5$. An idea could be to study the influence of the size of the rectangle, but it was not done because of missing time. This is a typical scaterplot obtained : \textbf{INSERT PLOT BLUE NOISE / RANDOM SCATTER}
@@ -99,7 +98,7 @@
       The advantage of an ESN is that a form of control is given by the echo state property. Usually, the matrix is generated randomly, and then multiplied by the ratio between the desired spectral radius and its greatest absolute eigenvalue. However, by only connecting neurons forward, we lose this property. If we sort the lines of the $W$ matrix according to the order of the $x$ value of the neurons, we obtain a triangular matrix. Thus, the only eigenvalue is $0$, which mean we cannot use this ratio. This can be a source of uncertainty, and the reason why there are cases of the reservoir being unstable.
 
     \paragraph{Delays in training}
-
+      In a ESN, the reservoir is fully connected: each neuron is connected to the input and the output. In this case however, the signal in the input can take some time to reach neurons connected to the output, since the neurons are not connected  to both. Thus, it was expected that the training would be disrupted by this time neeeded to reach the output. This is why there were trials to put delays in the training: for exemple the signal given is expected to be outputed after $n$ steps. At the step $k$, the network is expected to output what was given at step $k-n$. However, networks trained in such a way always had worse performance than the same network trained without delay. An explanation has yet to be found for this phenomenom. \textbf{GRAPH HERE?}
 
   \subsection{Observations}
     Importance of leak rate: prevent the reservoir from exploding. A lower leak rate will make the neurons less variable, thus increases the stability for slow varying signals.
@@ -107,5 +106,10 @@
     Lower number of neurons needed.
 
     Importance of noise in learning.
+
+    Error computing
+
+\bibliographystyle{unsrt}
+\bibliography{internship_report.bib}
 
 \end{document}

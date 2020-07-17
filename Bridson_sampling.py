@@ -84,16 +84,25 @@ if __name__ == '__main__':
     #plt.figure()
     #plt.subplot(1, 1, 1, aspect=1)
     width = 1
-    height = 0.5
-    n = 800
-
+    height = 1
+    n = 1000
     radius =  np.sqrt((width * height)/(n*np.sqrt(3)))
     points = Bridson_sampling(width = width,height = height, radius = radius)
     print(len(points))
-    '''
+
+    randomset_x = np.random.uniform(0,width,len(points))
+    randomset_y = np.random.uniform(0,height,len(points))
+    fig,axes = plt.subplots(ncols = 2)
     X = [x for (x, y) in points]
     Y = [y for (x, y) in points]
-    plt.scatter(X, Y, s=10)
-    plt.xlim(0, 1)
-    plt.ylim(0, 1)
-    #plt.show()'''
+    axes[1].scatter(X, Y, s=10)
+    axes[1].set_xlim(0, width)
+    axes[1].set_ylim(0, height)
+    axes[1].set_title("Bridson's algorithm")
+    axes[0].scatter(randomset_x, randomset_y, s=10)
+    axes[0].set_xlim(0, width)
+    axes[0].set_ylim(0, height)
+    axes[0].set_title("Random set")
+    fig.suptitle("For {} point".format(len(points)))
+
+    plt.show()
