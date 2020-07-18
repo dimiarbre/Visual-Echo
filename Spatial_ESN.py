@@ -16,20 +16,20 @@ import Bridson_sampling
 # Default parameters
 _data = {
     "seed"           : 21,
-    "label_input" : "Sinus",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
+    "label_input" : "Mackey Glass",   #"Mackey Glass", "Sinus" or "Constant" in this case, else must be imported by hand (use the "input" variable name if you want to use the main())
     "display_animation" : False,
     "display_connectivity" : True,     # If the internal structure is displayed. Allows better understanding and checking.
     "savename" : "",             #The file where the animation is saved
-    "number_neurons" : 100,
+    "number_neurons" : 400,
     "len_warmup" : 100,                #100,
     "len_training" : 1000,             #1000,
     "simulation_len" : 1000,
     "delays" : [i for i in range(100)],
     "delays" : [0],
     "external_sparsity" : 0.3,          #The probability of connection to the input/output (distance-based)
-    "intern_sparsity" : 0.5,   #The probability of connection inside of the reservoir.
-    "spectral_radius" : 0.2,
-    "leak_rate" : 0.5,         #The greater it is, the more a neuron will lose its previous activity
+    "intern_sparsity" : 0.15,   #The probability of connection inside of the reservoir.
+    "spectral_radius" : 1,
+    "leak_rate" : 0.7,         #The greater it is, the more a neuron will lose its previous activity
     "epsilon" : 1e-8,
     "bin_size" : 0.05,
     "noise" : 0.001,
@@ -702,7 +702,6 @@ def disp_sorted_matrix(esn):
     fig = plt.figure()
     ax = plt.subplot(1,1,1, aspect=1, frameon=False)
     image = ax.imshow(W,cmap = cm.coolwarm ,vmin = np.min(W), vmax = np.max(W))
-    ax.plot([0,esn.N],[0,esn.N])
     fig.suptitle("Matrix of size {}x{}\n{} effective connections\nLines of W are sorted according to ascending x".format(esn.N,esn.N,np.sum(is_connected)))
     plt.show()
 #----------------------------------------------------------------------------------------------------------------------
